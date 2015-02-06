@@ -1,0 +1,79 @@
+#!/usr/bin/env coffee
+yargs = require('yargs')
+  .demand(1)
+
+Promise = require './src/promise'
+
+sleep = (ms) ->
+  new Promise (ok, error) ->
+    setTimeout (() -> ok(1)), ms
+
+console.log 'sleep...'
+
+p = sleep(500)
+  .then () ->
+    console.log 'wak up...'
+
+# in many ways - the task/frame/etc is basically 
+
+
+
+myEval = (stmt) ->
+  eval "with (this) { #{stmt} }"
+
+foo = {a: 1, b: 2, console: console}
+obj = myEval.call foo, 'console.log("a => ", a);'
+console.log 'evaledResult', obj
+
+vm = require 'vm'
+vm.runInNewContext 'console.log("b => ", b)', foo
+proc = vm.runInNewContext 'function add(a, b) { return a + b; }', foo
+console.log proc(1, 2)
+
+## getting the function to make tail calls it would just mean to use a tail call 
+## the only question is - how do we translate these things into sync and async version, and how to mix them together?
+  
+
+# we want these to fit the pattern of async - I think it's pretty close so far...
+class TailCall
+  @make: (func, args) ->
+    new TailCall func, args
+  constructor: (@inner, @args) ->
+    console.log 'TailCall.ctor', @
+
+Function::tail = () ->
+  TailCall.make @, arguments
+
+Function::tco = (args..., cb) ->
+  tail = TailCall.make @, arguments
+  while cb != tail.inner
+    res = tail.inner.apply @, tail.args
+    if (res instanceof TailCall)
+      tail = res
+    else
+      return res
+
+fact = (n, acc, cb) ->
+  console.log '==fact', n, acc
+  if n > 0
+    fact.tail n - 1, acc * n, cb
+  else
+    cb acc
+
+#fact.tco parseInt(yargs.argv._[0]), 1, (res) ->
+#  console.log 'result', res
+# process tick or any IO will automatically reduce the stack count from the beginning, which is what we want.
+# but direct CPS itself doesn't - not the way we do it, since we are leveraging existing stack...
+asyncFact = (n, acc, cb) ->
+  try 
+    if n < 0 
+      throw {error: 'negative_integer', arguments: arguments}
+    else if n > 0 
+      process.nextTick.tco (() ->
+        asyncFact.tail n - 1, acc * n, cb), cb
+       
+    else
+      cb null, acc
+  catch e
+    cb e
+

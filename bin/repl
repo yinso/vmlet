@@ -1,0 +1,32 @@
+#!/usr/bin/env coffee # -*- coffee-script -*- -p
+
+Runtime = require '../src/'
+loglet = require 'loglet'
+repl = require 'repl'
+yargs = require('yargs')
+  .alias('d', 'debug')
+runtime = new Runtime()
+
+if yargs.argv.debug
+  loglet.setKeys yargs.argv.debug
+
+cmdString = (cmd) ->
+  cmd.substring(1, cmd.length - 2)
+
+myEval = (cmd, context, filename, cb) ->
+  stmt = cmdString(cmd)
+  if stmt == ''
+    cb null
+  else
+    runtime.eval cmdString(cmd), (err, res) ->
+      if err
+        loglet.error err
+        cb null
+      else
+        cb null, res
+
+repl.start 
+  prompt: 'sexp> '
+  input: process.stdin
+  output: process.stdout
+  eval: myEval
