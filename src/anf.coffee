@@ -138,7 +138,7 @@ class ANF extends BLOCK
     name = ast.name
     valAST = ast.val
     switch valAST.type()
-      when 'number', 'string', 'bool', 'null', 'symbol', 'binary', 'funcall', 'member', 'procedure', 'array', 'object', 'ref'
+      when 'number', 'string', 'bool', 'null', 'symbol', 'binary', 'funcall', 'member', 'procedure', 'array', 'object', 'ref', 'proxyval'
         return ast
       else
         @_normalizeTempVar name, valAST
@@ -176,7 +176,7 @@ class ANF extends BLOCK
     switch ast.type()
       when 'tempvar'
         @_propagateReturn ast.val
-      when 'number', 'string', 'bool', 'null', 'symbol', 'binary', 'funcall', 'member', 'procedure', 'array', 'object', 'ref'
+      when 'number', 'string', 'bool', 'null', 'symbol', 'binary', 'funcall', 'member', 'procedure', 'array', 'object', 'ref', 'proxyval'
         AST.make('return', ast)
       when 'if'
         thenE = @_propagateReturn ast.then

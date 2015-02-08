@@ -216,7 +216,14 @@ AST.register class TEMPVAR extends AST
     @name == v.name and @val.equals(v.val)
   toString: () ->
     "{TEMPVAR #{@name} #{@val}}"
-  
+
+AST.register class PROXYVAL extends AST
+  @type: 'proxyval'
+  constructor: (@name, @val) ->
+  _equals: (v) ->
+    @name == v.name and @val.equals(v.val)
+  toString: () ->
+    "{PROXYVAL #{@name} #{@val}}"
 
 AST.register class RETURN extends AST
   @type: 'return'

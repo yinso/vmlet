@@ -147,6 +147,13 @@ compileArray = (ast, buffer, level) ->
 
 register AST.get('array'), compileObject
 
+compileProxyVal = (ast, buffer, level) ->
+  buffer.push "_rt.get("
+  buffer.push JSON.stringify(ast.name)
+  buffer.push ")"
+
+register AST.get('proxyval'), compileProxyVal
+
 compileReturn = (ast, buffer, level) ->
   val = ast.val
   loglet.log 'compileReturn', ast, level, val.type()
@@ -208,7 +215,8 @@ module.exports =
 ###
 # tail recursive version
 (function (n) { (function helper(n, cur, next) { if n <= 0 cur else helper(n - 1, next, cur + next) })(n, 0, 1) })(5)
-
+define fib = function(n) { define helper = function helper(n, cur, next) { if n <= 0 cur else helper(n - 1, next, cur + next)} helper(n, 0, 1) }
+  
 
 ###
 

@@ -17,9 +17,9 @@ class CompileTimeEnvironment extends Environment
     @inner.has key
   get: (key) ->
     # we want it to return something that would be of substitute?
-    AST.make('funcall', AST.make('member', AST.make('symbol', '_rt'), AST.make('symbol', 'get')), [
-      AST.make('string', key)
-    ])
+    # this doesn't work - we need something that says it's available as a SUPER_REF. i.e. not a LOCAL_REF
+    # that are 
+    AST.make('proxyval', key, @inner.get(key))
   
 class Runtime
   constructor: (@baseEnv = baseEnv) ->
