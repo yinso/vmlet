@@ -209,6 +209,15 @@ AST.register class DEFINE extends AST
   toString: () ->
     "{DEFINE #{@name} #{@val}}"
 
+AST.register class TEMPVAR extends AST
+  @type: 'tempvar'
+  constructor: (@name, @val) ->
+  _equals: (v) ->
+    @name == v.name and @val.equals(v.val)
+  toString: () ->
+    "{TEMPVAR #{@name} #{@val}}"
+  
+
 AST.register class RETURN extends AST
   @type: 'return'
 

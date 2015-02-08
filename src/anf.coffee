@@ -50,7 +50,7 @@ class LexicalEnvironment extends Environment
   hasLocal: (name) ->
     @localMap.hasOwnProperty(name)
   getLocal: (name) ->
-    @localMap[name]
+    @get @localMap[name]
   gensym: (prefix = LexicalEnvironment.defaultPrefix) ->
     if not @genids.hasOwnProperty(prefix)
       @genids[prefix] = 0
@@ -78,21 +78,16 @@ class ANF extends BLOCK
   hasLocal: (name) ->
     @env.hasLocal name
   getLocal: (name) ->
-    local = @env.getLocal name
-    @env.get local
-  gensym: (prefix = LexicalEnvironment.defaultPrefix) ->
-    if not @constructor.genids.hasOwnProperty(prefix)
-      @constructor.genids[prefix] = 0
-    "_#{prefix}$#{@constructor.genids[prefix]++}"
+    @env.getLocal name
   assign: (val, sym = LexicalEnvironment.defaultPrefix) ->
     varName = @env.assign val, sym
-    @items.push AST.make('define', varName, val)
+    @items.push AST.make('tempvar', varName, val)
     AST.make 'symbol', varName
   scalar: (ast) ->
     @items.push ast
     ast
   define: (name, val) ->
-    @assign AST.make('define', name, val)
+    @items.push AST.make('define', name, val)
   binary: (op, lhs, rhs, sym = LexicalEnvironment.defaultPrefix) ->
     # we want to propagate the define down t
     # we should have an AST for this??? 
@@ -130,27 +125,29 @@ class ANF extends BLOCK
     items = []
     for item, i in @items
       if i < @items.length - 1
-        if item.type() == 'define'
-          items.push @normalizeDefine(item)
-        else if item.type() == 'throw'
+        if item.type() == 'tempvar'
+          items.push @normalizeTempVar(item)
+        else if item.type() == 'throw' 
+          items.push item
+        else if item.type() == 'define'
           items.push item
       else
         items.push item
     @items = items
-  normalizeDefine: (ast) ->
+  normalizeTempVar: (ast) ->
     name = ast.name
     valAST = ast.val
     switch valAST.type()
       when 'number', 'string', 'bool', 'null', 'symbol', 'binary', 'funcall', 'member', 'procedure', 'array', 'object', 'ref'
         return ast
       else
-        @_normalizeDefine name, valAST
-  _normalizeDefine: (name, ast) ->
-    loglet.log '_normalizeDefine', name, ast
+        @_normalizeTempVar name, valAST
+  _normalizeTempVar: (name, ast) ->
+    loglet.log '_normalizeTempVar', name, ast
     switch ast.type()
       when 'if'
-        thenE = @_normalizeDefine name, ast.then
-        elseE = @_normalizeDefine name, ast.else
+        thenE = @_normalizeTempVar name, ast.then
+        elseE = @_normalizeTempVar name, ast.else
         AST.make 'if', ast.if, thenE, elseE
       when 'block'
         items = 
@@ -158,7 +155,7 @@ class ANF extends BLOCK
             if i < ast.items.length - 1
               item
             else
-              @_normalizeDefine name, item
+              @_normalizeTempVar name, item
         AST.make 'block', items
       when 'anf'
         items = 
@@ -166,16 +163,18 @@ class ANF extends BLOCK
             if i < ast.items.length - 1
               item
             else
-              @_normalizeDefine name, item
+              @_normalizeTempVar name, item
         new ANF items, @env
       else
         throw errorlet.create {error: 'ANF._normalizeReturn:unsupported_ast_type', type: ast.type()}
   propagateReturn: () ->
-    ast = @items.pop() # the last item is the only one that's in return position.
-    @items.push @_propagateReturn ast
+    ast =  @_propagateReturn @items.pop()# the last item is the only one that's in return position.
+    @items.push ast 
+    if ast.type() == 'define'
+      @items.push AST.make('return', AST.make('null', null))
   _propagateReturn: (ast) ->
     switch ast.type()
-      when 'define'
+      when 'tempvar'
         @_propagateReturn ast.val
       when 'number', 'string', 'bool', 'null', 'symbol', 'binary', 'funcall', 'member', 'procedure', 'array', 'object', 'ref'
         AST.make('return', ast)
@@ -202,6 +201,8 @@ class ANF extends BLOCK
       when 'return'
         ast
       when 'throw'
+        ast
+      when 'define'
         ast
       else
         throw errorlet.create {error: 'ANF.propagateReturn:unsupported_ast_type', type: ast.type()}
@@ -278,13 +279,28 @@ register AST.get('block'), transformBlock
 
 transformDefine = (ast, anf, level) ->
   loglet.log 'transformDefine', ast
-  res = _transform ast.val, anf, level
-  anf.define ast.name, res
+  if level > 0 
+    transformTempVar ast, anf, level
+  else
+    res = _transform ast.val, anf, level
+    # this define will keep the name *AS IS*...
+    anf.define ast.name, res
   #key = anf.mapLocal ast.name, res
   #loglet.log 'transformDefine.done', ast.name, res, key
   #key
 
 register AST.get('define'), transformDefine
+
+# this ought not be directly used outside... but we will see...
+transformTempVar = (ast, anf, level) ->
+  res = _transform ast.val, anf, level
+  local = anf.assign res, ast.name
+  anf.mapLocal ast.name, local.val
+  local
+  # this define will keep the name *AS IS*...
+  #anf.define ast.name, res
+
+register AST.get('tempvar'), transformTempVar
 
 transformObject = (ast, anf, level) ->
   keyVals = 
@@ -310,11 +326,12 @@ transformMember = (ast, anf, level) ->
 register AST.get('member'), transformMember
 
 transformIdentifier = (ast, anf, level) ->
-  loglet.log '--transformIdentifier', ast, anf, level
-  if anf.env.has ast.val 
+  loglet.log '--transformIdentifier', ast, anf.env, level
+  if anf.hasLocal ast.val
+    anf.scalar anf.getLocal(ast.val)
+  else if anf.env.has ast.val 
+    loglet.log '--transformIdentifier.env.has', ast, anf.env.get(ast.val)
     anf.scalar anf.env.get ast.val
-  else if anf.hasLocal ast.val
-    anf.getLocal(ast.val)
   else
     throw errorlet.create {error: 'ANF.transform:unknown_identifier', id: ast.val}  
   

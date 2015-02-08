@@ -27,8 +27,6 @@ class Runtime
     @parser = parser
     @compiler = compiler
     @baseEnv.define 'console', console
-    @baseEnv.define 'runtime', @
-    @baseEnv.define '__done', (err, res) -> console.log err, res
     @context = vm.createContext { _rt: @ , console: console , process: process }
     @compileEnv = new CompileTimeEnvironment @baseEnv
   define: (key, val) ->
@@ -36,6 +34,8 @@ class Runtime
   eval: (stmt, cb) ->
     if stmt == ':context'
       return cb null, @context
+    else if stmt == ':env'
+      return cb null, @baseEnv
     try 
       loglet.log '-------- Runtime.eval =>', stmt
       ast = @parser.parse stmt 

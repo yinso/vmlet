@@ -78,9 +78,15 @@ register AST.get('binary'), compileBinary
 
 compileDefine = (ast, buffer, level) ->
   value = _compile ast.val, new LineBuffer(), level
-  buffer.push "var #{ast.name} = #{value};"
+  buffer.push "_rt.define(#{JSON.stringify(ast.name)}, #{value});"
 
 register AST.get('define'), compileDefine
+
+compileTempVar = (ast, buffer, level) ->
+  value = _compile ast.val, new LineBuffer(), level
+  buffer.push "var #{ast.name} = #{value};"
+
+register AST.get('tempvar'), compileTempVar
 
 compileParam = (ast, buffer, level) ->
   buffer.push ast.name
