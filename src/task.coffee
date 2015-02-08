@@ -79,7 +79,7 @@ class Task
 AST = require './ast'
 compiler = require './compiler'
 
-oldCompileProc = compiler.get AST.get('proc')
+oldCompileProc = compiler.get AST.get('procedure')
 
 compileProcedure = (ast, env, code, isTail) ->
   loglet.log 'compileProcedure.called'
@@ -87,7 +87,7 @@ compileProcedure = (ast, env, code, isTail) ->
   proc = makeProcedure res.items[0].push
   code.push(proc)
 
-#compiler.override AST.get('proc'), compileProcedure
+#compiler.override AST.get('procedure'), compileProcedure
 
 makeProcedure = (proc) ->
   outer = (args..., cb) ->

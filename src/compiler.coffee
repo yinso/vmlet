@@ -55,8 +55,8 @@ register AST.get('string'), compileScalar
 register AST.get('null'), compileScalar
 
 compileBlock = (ast, env, code, isTail) ->
-  for lineAST, i in ast.val
-    if i == ast.val.length - 1
+  for lineAST, i in ast.items
+    if i == ast.items.length - 1
       # in a block - the last line will be the tail. but this should also only be in play if it's passed in.
       code.append compileOne(lineAST, env, new CodeBlock(), isTail) 
     else
@@ -135,7 +135,7 @@ compileProcedure = (ast, env, code, isTail) ->
   proc.setBody bodyCode
   code.push proc # no reason to run through this again!
 
-register AST.get('proc'), compileProcedure
+register AST.get('procedure'), compileProcedure
 
 compileBinary = (ast, env, code, isTail) ->
   if not env.has ast.op

@@ -20,6 +20,10 @@ class AST
   equals: (v) -> 
     v instanceof @constructor and @_equals(v)
   _equals: (v) -> v.val == @val
+  isa: (v, type) ->
+    v instanceof AST.get(type)
+  type: () ->
+    @constructor.type
   inspect: () ->
     @toString()
   toString: () ->
@@ -110,18 +114,29 @@ AST.register class UNQUOTESPLICING extends AST
     @val.equals(v.val)
 
 AST.register class BLOCK extends AST
+  constructor: (@items = []) ->
   @type: 'block'
   _equals: (v) -> 
-    if v.val.length == @val.length
-      for val, i in v.val
-          res = @val[i].equals(val)
+    if v.items.length == @items.length
+      for val, i in v.items
+          res = @items[i].equals(val)
           if res
             continue
           else
             return false
       true
     else
-      false  
+      false 
+  toString: () ->
+    buffer = []
+    buffer.push '{BLOCK'
+    for item in @items
+      buffer.push item
+    buffer.push '}'
+    buffer.join '\n'
+
+AST.register class REF extends AST
+  @type: 'ref'
 
 AST.register class PARAM extends AST
   constructor: (@name, @type = null, @default = null) ->
@@ -145,8 +160,8 @@ AST.register class PARAM extends AST
   toString: () ->
     "{PARAM #{@name} #{@type} #{@default}}"
 
-AST.register class PROC extends AST
-  @type: 'proc'
+AST.register class PROCEDURE extends AST
+  @type: 'procedure'
   constructor: (@name, @params, @body, @returns = null) ->
   _equals: (v) ->
     if @name == @name
@@ -157,7 +172,7 @@ AST.register class PROC extends AST
     else
       false
   toString: () ->
-    "{PROC #{@name} #{@params} #{@body} #{@returns}}"
+    "{PROCEDURE #{@name} #{@params} #{@body} #{@returns}}"
 
 AST.register class IF extends AST
   @type: 'if'
@@ -193,6 +208,9 @@ AST.register class DEFINE extends AST
     @name == v.name and @val.equals(v.val)
   toString: () ->
     "{DEFINE #{@name} #{@val}}"
+
+AST.register class RETURN extends AST
+  @type: 'return'
 
 AST.register class BINARY extends AST
   @type: 'binary'

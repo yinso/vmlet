@@ -1,2 +1,2 @@
-module.exports = require './vm'
+module.exports = require './runtime'
 

@@ -218,6 +218,9 @@ asyncRead = (n, cb) ->
         else
           cb.tail null, data
 
+class Result
+  constructor: (@__vmlet_result) ->
+
 # this is now possible to create a function that's CPS'd to get the result back.
 # this of course is going to be "slow"
 class RT
@@ -228,7 +231,7 @@ class RT
   tail: (func, args...) ->
     if func instanceof bluebird
       return func
-    loglet.log 'RT.__tail', func, args
+    #loglet.log 'RT.__tail', func, args
     lastArg = args[args.length - 1]
     isLastArgFunc = typeof(lastArg) == 'function' or lastArg instanceof Function
     cb = if isLastArgFunc then lastArg else () ->
@@ -245,6 +248,17 @@ class RT
       p
     else
       return {tail: func, args: args, cb: cb}
+  result: (v) ->
+    {__vmlet_result: v}
+    #new Result v
+  isResult: (v) ->
+    #v instanceof Result
+    v?.__vmlet_result
+  unbind: (v) ->
+    if @isResult(v)
+      v.__vmlet_result
+    else
+      v
   tco: (func, args..., cb) ->
     @_tco func, args, cb
   while: (cond, ifTrue, ifFalse) ->
@@ -266,6 +280,8 @@ class RT
         return @_tcoAsync res, cb
       else if res?.tail and res?.cb
         tail = res 
+      else if @isResult(res)
+        return cb null, @unbind res
       else
         return cb errorlet.create {error: 'invalid_tco_function_return', value: res}
     return tail.tail tail.args...
@@ -325,13 +341,70 @@ asyncRead2 = (n, filePath, cb) ->
   catch e 
     return rt.tail cb, e
 
+syncFibTail = (n) ->
+  helper = (n, acc, next) ->
+    if n <= 0
+      return rt.result acc
+    else 
+      return rt.tail helper, n - 1, next, acc + next
+  return rt.tail helper, n, 0, 1
+
+# how to ensure the context is done correctly?
+syncFibNonTail = (n) ->
+  if n <= 0
+    return rt.result 0
+  else if n <= 2
+    return rt.result 1
+  else 
+    return rt.result rt.unbind(syncFibNonTail(n - 1)) + rt.unbind(syncFibNonTail(n - 2))
+
+syncFibNonTail1 = (n) ->
+  helper = (n) ->
+    if n <= 0
+      0
+    else if n <= 2
+      1
+    else
+      helper(n - 1) + helper(n - 2)
+  return rt.result helper(n)
+
 runMe = () ->
     #.then (next) ->
     #  vmInternal next
   funclet
     .start (next) ->
+      baseline next
+    .then (next) ->
+      timerKey = 'sync.fib.tail'
+      console.time timerKey
+      rt.tco syncFibTail, seqNum, (err, res) ->
+        console.timeEnd timerKey
+        if err
+          next err
+        else
+          loglet.log res
+          next null
+    .then (next) ->
+      timerKey = 'sync.fib.nontail'
+      console.time timerKey
+      rt.tco syncFibNonTail, seqNum, (err, res) ->
+        console.timeEnd timerKey
+        if err
+          next err
+        else
+          loglet.log res
+          next null
+    .then (next) ->
+      timerKey = 'async.fib4.runtime.tco'
+      console.time timerKey
+      rt.tco asyncFib4, seqNum, (err, res) ->
+        console.timeEnd timerKey
+        if err
+          next err
+        else
+          loglet.log 'async.fib4', res
+          next null
       ###
-        baseline next
       .then (next) ->
         cpsTco next
       .then (next) ->
@@ -348,16 +421,6 @@ runMe = () ->
       #      loglet.log 'read-data', data
       #      next null
       .then (next) ->
-        timerKey = 'async.fib4.runtime.tco'
-        console.time timerKey
-        rt.tco asyncFib4, seqNum, (err, res) ->
-          console.timeEnd timerKey
-          if err
-            next err
-          else
-            loglet.log 'async.fib4', res
-            next null
-      .then (next) ->
         timerKey = 'async.read2.runtime.tco'
         console.time timerKey
         rt.tco asyncRead2, seqNum, 'package.json', (err, data) ->
@@ -369,7 +432,6 @@ runMe = () ->
             loglet.log data
             next null
       .then (next) ->
-      ###
       console.log 'sleep...'
       rt.tco sleep, 1000, (err) ->
         if err
@@ -377,6 +439,7 @@ runMe = () ->
         else
           loglet.log 'sleep for', 1000, 'milliseonds'
           next null
+      ###
     .catch (e) ->
       loglet.croak e
     .done () ->

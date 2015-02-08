@@ -1,5 +1,6 @@
 loglet = require 'loglet'
 errorlet = require 'errorlet'
+Environment = require './environment'
 ## maybe we don't deal with defaults just yet...
 ## let's figure out what we can do
 
@@ -43,6 +44,11 @@ class ParameterList
     new @ params
   @makeParam: (args...) ->
     new Parameter args...
+  @makeEnv: (params, prevEnv = null) ->
+    newEnv = new Environment {}, prevEnv
+    for param in params
+      newEnv.defineRef param.name
+    newEnv
   constructor: (@params = []) ->
   add: (param) ->
     @params.push param

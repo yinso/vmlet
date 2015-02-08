@@ -5,20 +5,26 @@ loglet = require 'loglet'
 repl = require 'repl'
 yargs = require('yargs')
   .alias('d', 'debug')
-runtime = new Runtime()
+baseEnv = require '../src/baseenv'
+runtime = new Runtime(baseEnv)
 
 if yargs.argv.debug
   loglet.setKeys yargs.argv.debug
 
 cmdString = (cmd) ->
-  cmd.substring(1, cmd.length - 2)
+  if cmd.length > 2 and cmd[0] == '(' and cmd[cmd.length - 1] == ')'
+    cmd.substring(1, cmd.length - 2)
+  else
+    cmd
 
 myEval = (cmd, context, filename, cb) ->
+  #loglet.log 'myEval.call', cmd
   stmt = cmdString(cmd)
   if stmt == ''
     cb null
   else
     runtime.eval cmdString(cmd), (err, res) ->
+      #loglet.log 'myEval.result', err, res
       if err
         loglet.error err
         cb null
@@ -26,7 +32,7 @@ myEval = (cmd, context, filename, cb) ->
         cb null, res
 
 repl.start 
-  prompt: 'sexp> '
+  prompt: 'q> '
   input: process.stdin
   output: process.stdout
   eval: myEval

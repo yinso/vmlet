@@ -81,7 +81,7 @@ describe 'compiler test', () ->
       .push(5)
       .define('test')
       
-  canCompile AST.make('proc', 'add', 
+  canCompile AST.make('procedure', 'add', 
       [
         AST.make('param', 'a')
         AST.make('param', 'b')
@@ -169,3 +169,4 @@ describe 'compiler test', () ->
       null
     ),
     undefined
+  

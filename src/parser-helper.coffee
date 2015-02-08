@@ -73,7 +73,7 @@ param = (name) ->
   AST.make 'param', name
 
 funcDecl = (name, params, body, returns = null) ->
-  AST.make 'proc', (if name then name.val else name), params, body, returns
+  AST.make 'procedure', (if name then name.val else name), params, body, returns
   
 throwAST = (e) ->
   AST.make 'throw', e

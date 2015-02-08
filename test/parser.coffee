@@ -107,7 +107,7 @@ describe 'parser test', ->
       ), 
       [ AST.make('number', 2) ]
   canParse "function add(a, b) a + b", 
-    AST.make 'proc',
+    AST.make 'procedure',
       'add',
       [
         AST.make('param', 'a')
@@ -119,7 +119,7 @@ describe 'parser test', ->
         AST.make('symbol', 'b')
       )
   canParse "func (a, b) { a + b }", 
-    AST.make 'proc',
+    AST.make 'procedure',
       null,
       [
         AST.make('param', 'a')
