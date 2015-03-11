@@ -31,6 +31,9 @@ class LineBuffer
       @append line
     #loglet.log 'LineBuffer.write', str, @lines
     @
+  writeLine: (str) ->
+    @write str
+    @newline()
   append: (line) ->
     newLine = new Line(@level, line)
     @lines.push newLine

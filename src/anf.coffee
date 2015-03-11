@@ -79,14 +79,19 @@ class ANF extends BLOCK
     @env.hasLocal name
   getLocal: (name) ->
     @env.getLocal name
+  pushEnv: () ->
+  popEnv: () ->
   assign: (val, sym = LexicalEnvironment.defaultPrefix) ->
     varName = @env.assign val, sym
     @items.push AST.make('tempvar', varName, val)
     AST.make 'symbol', varName
-  scalar: (ast) ->
+  push: (ast) ->
     @items.push ast
     ast
+  scalar: (ast) ->
+    @push ast
   define: (name, val) ->
+    @env.define name, val
     @items.push AST.make('define', name, val)
   binary: (op, lhs, rhs, sym = LexicalEnvironment.defaultPrefix) ->
     # we want to propagate the define down t
@@ -105,14 +110,17 @@ class ANF extends BLOCK
   member: (head, key, sym = LexicalEnvironment.defaultPrefix) ->
     ast = AST.make 'member', head, key
     @assign ast, sym
+  taskcall: (funcall, args, sym = LexicalEnvironment.defaultPrefix) ->
+    ast = AST.make 'taskcall', funcall, args
+    @assign ast, sym
   funcall: (funcall, args, sym = LexicalEnvironment.defaultPrefix) ->
     ast = AST.make 'funcall', funcall, args
     @assign ast, sym
   procedure: (name, params, body, sym = LexicalEnvironment.defaultPrefix) ->
     ast = AST.make 'procedure', name, params, body
     @assign ast, sym
-  throw: (exp, sym = LexicalEnvironment.defaultPrefix) ->
-    ast = AST.make 'throw', exp
+  task: (name, params, body, sym = LexicalEnvironment.defaultPrefix) ->
+    ast = AST.make 'task', name, params, body
     @assign ast, sym
   normalize: () ->
     loglet.log 'ANF.normalize', @
@@ -138,7 +146,7 @@ class ANF extends BLOCK
     name = ast.name
     valAST = ast.val
     switch valAST.type()
-      when 'number', 'string', 'bool', 'null', 'symbol', 'binary', 'funcall', 'member', 'procedure', 'array', 'object', 'ref', 'proxyval'
+      when 'number', 'string', 'bool', 'null', 'symbol', 'binary', 'funcall', 'member', 'procedure', 'array', 'object', 'ref', 'proxyval', 'taskcall', 'task'
         return ast
       else
         @_normalizeTempVar name, valAST
@@ -171,12 +179,12 @@ class ANF extends BLOCK
     ast =  @_propagateReturn @items.pop()# the last item is the only one that's in return position.
     @items.push ast 
     if ast.type() == 'define'
-      @items.push AST.make('return', AST.make('null', null))
+      @items.push AST.make('return', AST.make('proxyval', '_rt.unit'))
   _propagateReturn: (ast) ->
     switch ast.type()
       when 'tempvar'
         @_propagateReturn ast.val
-      when 'number', 'string', 'bool', 'null', 'symbol', 'binary', 'funcall', 'member', 'procedure', 'array', 'object', 'ref', 'proxyval'
+      when 'number', 'string', 'bool', 'null', 'symbol', 'binary', 'funcall', 'member', 'procedure', 'array', 'object', 'ref', 'proxyval', 'task', 'taskcall'
         AST.make('return', ast)
       when 'if'
         thenE = @_propagateReturn ast.then
@@ -202,10 +210,25 @@ class ANF extends BLOCK
         ast
       when 'throw'
         ast
+      when 'try'
+        @_propagateReturnTry ast
+      when 'catch'
+        @_propagateReturnCatch ast
       when 'define'
         ast
       else
         throw errorlet.create {error: 'ANF.propagateReturn:unsupported_ast_type', type: ast.type()}
+  _propagateReturnCatch: (ast) ->
+    loglet.log 'ANF._propagateReturnCatch', ast
+    body = @_propagateReturn ast.body
+    AST.make 'catch', ast.param, body
+  _propagateReturnTry: (ast) ->
+    loglet.log 'ANF._propagateReturnTry', ast
+    body = @_propagateReturn ast.body
+    catches = 
+      for c in ast.catches
+        @_propagateReturn c
+    AST.make 'try', body, catches, ast.finally
   toString: () ->
     buffer = []
     buffer.push '{ANF'
@@ -214,6 +237,7 @@ class ANF extends BLOCK
     buffer.push '}'
     buffer.join '\n'
 
+AST.register ANF
 
 register = (ast, transformer) ->
   if types.hasOwnProperty(ast.type)
@@ -237,7 +261,7 @@ transform = (ast, env = baseEnv, anf = ANF.fromEnv(env), level = 0) ->
   anf
 
 _transform = (ast, anf = ANF.fromEnv(baseEnv), level = 0) ->
-  loglet.log '--transform', ast, anf, level
+  loglet.log '--anf.transform', ast, anf, level
   type = ast.constructor.type
   if types.hasOwnProperty(type)
     transformer = get ast
@@ -255,6 +279,7 @@ register AST.get('null'), transformScalar
 register AST.get('string'), transformScalar
 
 transformBinary = (ast, anf, level) ->
+  loglet.log '--anf.transformBinary', ast
   lhs = _transform ast.lhs, anf, level
   rhs = _transform ast.rhs, anf, level
   anf.binary ast.op, lhs, rhs
@@ -262,23 +287,35 @@ transformBinary = (ast, anf, level) ->
 register AST.get('binary'), transformBinary
 
 transformIf = (ast, anf, level) ->
-  loglet.log '--transformIf', ast, anf, level
+  loglet.log '--anf.transformIf', ast, anf, level
   cond = _transform ast.if, anf, level
   thenAST = transform ast.then, anf.env, ANF.fromEnv(anf.env), level
+  thenAST = 
+    if thenAST.items.length == 1
+      thenAST.items[0]
+    else
+      thenAST
   elseAST = transform ast.else, anf.env, ANF.fromEnv(anf.env), level
+  elseAST = 
+    if elseAST.items.length == 1
+      elseAST.items[0]
+    else
+      elseAST
   anf.if cond, thenAST, elseAST
 
 register AST.get('if'), transformIf
 
 transformBlock = (ast, anf, level) ->
+  anf.pushEnv()
   for i in [0...ast.items.length - 1]
-    _transform ast.items[i], anf, level 
-  _transform ast.items[ast.items.length - 1], anf, level
-
+    _transform ast.items[i], anf, level + 1
+  res = _transform ast.items[ast.items.length - 1], anf, level
+  anf.popEnv()
+  res
 register AST.get('block'), transformBlock
 
 transformDefine = (ast, anf, level) ->
-  loglet.log 'transformDefine', ast
+  loglet.log 'transformDefine', ast, level
   if level > 0 
     transformTempVar ast, anf, level
   else
@@ -326,11 +363,11 @@ transformMember = (ast, anf, level) ->
 register AST.get('member'), transformMember
 
 transformIdentifier = (ast, anf, level) ->
-  loglet.log '--transformIdentifier', ast, anf.env, level
+  loglet.log '--anf.transformIdentifier', ast, anf.env, level
   if anf.hasLocal ast.val
     anf.scalar anf.getLocal(ast.val)
   else if anf.env.has ast.val 
-    loglet.log '--transformIdentifier.env.has', ast, anf.env.get(ast.val)
+    loglet.log '--anf.transformIdentifier.env.has', ast, anf.env.get(ast.val)
     anf.scalar anf.env.get ast.val
   else
     throw errorlet.create {error: 'ANF.transform:unknown_identifier', id: ast.val}  
@@ -338,7 +375,7 @@ transformIdentifier = (ast, anf, level) ->
 register AST.get('symbol'), transformIdentifier
 
 transformFuncall = (ast, anf, level) ->
-  loglet.log '--transformFuncall', ast, anf, level
+  loglet.log '--anf.transformFuncall', ast, anf, level
   args = 
     for arg in ast.args
       _transform arg, anf, level
@@ -364,25 +401,72 @@ transformProcedure = (ast, anf, level) ->
       newEnv.mapParam param
   body = transform ast.body, newEnv, ANF.fromEnv(newEnv), level + 1
   anf.procedure name, params, body
-  ###
-  newEnv = LexicalEnvironment.fromParams ast.params, anf.env
-  if ast.name
-    newEnv.defineRef ast.name
-  body = transform ast.body, newEnv
-  params = 
-    for param in ast.params
-      local = newEnv.getLocal param.name
-      AST.make 'param', local
-  anf.procedure ast.name, params, body
-  ###
 
 register AST.get('procedure'), transformProcedure
 
+transformTask = (ast, anf, level) ->
+  newEnv = new LexicalEnvironment {}, anf.env
+  name = 
+    if ast.name
+      newEnv.defineRef ast.name
+    else
+      undefined
+  params = 
+    for param in ast.params
+      newEnv.mapParam param
+  body = transform ast.body, newEnv, ANF.fromEnv(newEnv), level + 1
+  anf.task name, params, body
+
+register AST.get('task'), transformTask
+
+transformTaskcall = (ast, anf, level) ->
+  loglet.log '--anf.transformTaskcall', ast, anf, level
+  args = 
+    for arg in ast.args
+      _transform arg, anf, level
+  funcall = _transform ast.funcall, anf, level
+  anf.taskcall funcall, args
+
+register AST.get('taskcall'), transformTaskcall
+
 transformThrow = (ast, anf, level) ->
   exp = _transform ast.val, anf, level
-  anf.throw exp
+  anf.push AST.make 'throw', exp
   
 register AST.get('throw'), transformThrow
+
+transformCatch = (ast, anf, level) ->
+  loglet.log '--anf.transformCatch', ast
+  newEnv = new LexicalEnvironment {}, anf.env
+  param = newEnv.mapParam ast.param
+  body = transform ast.body, newEnv, ANF.fromEnv(newEnv), level + 1
+  AST.make 'catch', param, body
+
+register AST.get('catch'), transformCatch
+
+transformFinally = (ast, anf, level) ->
+  loglet.log '--anf.transformFinally', ast
+  body = _transform ast.body, anf, level + 1
+  AST.make 'finally', body
+
+register AST.get('finally'), transformFinally
+
+transformTry = (ast, anf, level) ->
+  loglet.log '--anf.transformTry', ast
+  newEnv = new LexicalEnvironment {}, anf.env
+  body = transform ast.body, newEnv, ANF.fromEnv(newEnv), level + 1
+  catches = 
+    for c in ast.catches
+      transformCatch c, anf, level
+  fin = 
+    if ast.finally instanceof AST
+      transformFinally ast.finally, anf, level
+    else
+      null
+  loglet.log '--anf.transformTry', body, catches, fin
+  anf.push AST.make 'try', body, catches, fin
+
+register AST.get('try'), transformTry
 
 module.exports = 
   register: register

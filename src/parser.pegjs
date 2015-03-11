@@ -9,7 +9,7 @@ HELPER FUNCTIONS
 TopLevel
 ************************************************************************/
 start
-= _ exps:Expression* _ {
+= _ exps:TopLevelExpression* _ {
   if (exps.length == 1)
     return exps[0];
   else 
@@ -31,12 +31,19 @@ Keywords
 / 'func'
 / 'procedure'
 / 'proc'
+/ 'task'
 / 'define'
 / 'set'
 / 'throw'
 / 'try'
 / 'catch'
 / 'finally'
+/ '<-'
+/ '+'
+
+TopLevelExpression 
+= TaskExpression
+/ Expression
 
 Expression
 = exp:IfExp _ { return exp; }
@@ -54,6 +61,7 @@ Expression
 / t:TryCatchExp _ { return t; }
 / define:DefineExp _ { return define; }
 / func:FunctionDeclExp _ { return func; }
+/ task:TaskDeclExp _ { return task; }
 
 /************************************************************************
 DefineExp
@@ -75,6 +83,117 @@ funcParametersExp
 
 funcParameterExp
 = param:SymbolExp _ ','? _ { return helper.param(param.val); }
+
+/************************************************************************
+TaskDeclExp
+************************************************************************/
+TaskDeclExp
+= taskDeclHeadExp _ id:SymbolExp? _ params:funcParametersExp _ exp:TaskExpression { return helper.task(id, params,exp); }
+
+taskDeclHeadExp 
+= 'task'
+
+funcParametersExp
+= '(' _ params:funcParameterExp* _ ')' _ { return params; }
+
+funcParameterExp
+= param:SymbolExp _ ','? _ { return helper.param(param.val); }
+
+TaskExpression
+= IfTaskExp
+/ OperatorTaskExp 
+/ ArrayTaskExp 
+/ ObjectTaskExp 
+/ BlockTaskExp 
+/ DefineTaskExp 
+/ exp:TaskcallExp _ { return exp; }
+/ exp:MemberExp _ { return exp ; }
+/ n:NumberExp _ { return n; }
+/ str:StringExp _ { return str; }
+/ bool:BoolExp _ { return bool; }
+/ n:NullExp _ { return n; }
+/ sym:SymbolExp _ { return sym; }
+
+IfTaskExp
+= 'if' _ cond:TaskExpression _ 'then'? _ thenExp:TaskExpression _ 'else'? _ elseExp:TaskExpression {
+  return helper.if(cond, thenExp, elseExp);
+}
+
+/************************************************************************
+OperatorTaskExp
+
+This determines the precedences of the operators.
+************************************************************************/
+OperatorTaskExp 
+= OrTaskExp
+
+OrTaskExp
+= lhs:AndTaskExp _ rest:orRestTaskExp* _ { return helper.operator(lhs, rest); }
+
+orRestTaskExp
+= op:('||' / 'or') _ rhs:AndTaskExp _ { return {op: 'or', rhs: rhs}; }
+
+AndTaskExp
+= lhs:CompareTaskExp _ rest:andRestTaskExp* _ { return helper.operator(lhs, rest); }
+
+andRestTaskExp
+= op:('&&' / 'and') _ rhs:CompareTaskExp _ { return {op: 'and', rhs: rhs}; }
+
+CompareTaskExp
+= lhs:AddTaskExp _ rest:compareRestTaskExp* _ { return helper.operator(lhs, rest); }
+
+compareRestTaskExp
+= op:('==' / '!=' / '>=' / '>' / '<=' / '<') _ rhs:AddTaskExp _ { return {op: op, rhs: rhs}; }
+
+AddTaskExp
+= lhs:MultiplyTaskExp _ rest:addRestTaskExp* _ { return helper.operator(lhs, rest); }
+
+addRestTaskExp
+= op:('+' / '-') _ rhs:MultiplyTaskExp _ { return {op: op, rhs: rhs}; }
+
+MultiplyTaskExp
+= lhs:AtomicTaskExp _ rest:multiplyRestTaskExp* _ { return helper.operator(lhs, rest); }
+
+multiplyRestTaskExp 
+= op:('*' / '/' / '%') _ rhs:AtomicTaskExp _ { return {op: op, rhs: rhs}; }
+
+/************************************************************************
+AtomicTaskExp
+************************************************************************/
+AtomicTaskExp
+= '(' _ exp:TaskcallExp _ ')' _ { return exp; }
+/ AtomicExp
+
+/************************************************************************
+BlockTaskExp
+************************************************************************/
+BlockTaskExp
+= '{' _ exps:TaskExpression* _'}' { return helper.block(exps); }
+
+/************************************************************************
+ArrayTaskExp
+************************************************************************/
+ArrayTaskExp
+= '[' _ items:arrayItemTaskExp* _ ']' { return helper.array(items); }
+
+arrayItemTaskExp
+= item:TaskExpression _ keyValDelim? { return item; }
+
+/************************************************************************
+ObjectTaskExp
+************************************************************************/
+ObjectTaskExp
+= '{' _ keyVals:keyValTaskExp* _ '}' _ { return helper.object(keyVals); }
+
+keyValTaskExp
+= key:keyExp _ ':' _ val:TaskExpression _ keyValDelim? { return [ key, val ]; }
+
+/************************************************************************
+DefineTaskExp
+************************************************************************/
+DefineTaskExp
+= 'define' _ id:SymbolExp _ '=' _ exp:TaskExpression _ { return helper.define(id, exp); }
+/ 'define' _ id:SymbolExp _ exp:TaskcallExp _ { return helper.define(id, exp); }
 
 /************************************************************************
 ThrowExp
@@ -140,7 +259,9 @@ multiplyRestExp
 IfExp
 ************************************************************************/
 IfExp
-= 'if' _ condExp:Expression 'then'? _ thenExp:Expression _ 'else'? _ elseExp:Expression _ { return helper.if(condExp, thenExp, elseExp); }
+= 'if' _ condExp:Expression 'then'? _ thenExp:Expression _ 'else'? _ elseExp:Expression _ { 
+  return helper.if(condExp, thenExp, elseExp); 
+}
 
 /************************************************************************
 BlockExp
@@ -188,6 +309,13 @@ symbol1stChar
 
 symbolRestChar
 = [^ \t\n\r\(\)\;\ \"\'\,\`\{\}\.\,\:\[\]]
+/************************************************************************
+TaskcallExp
+
+This should be in line with 
+************************************************************************/
+TaskcallExp
+= '<-' _ inner:MemberExp _ { return helper.taskcall(inner); }
 
 /************************************************************************
 MemberExp
@@ -220,7 +348,7 @@ argumentExp
 ObjectExp
 ************************************************************************/
 ObjectExp
-= '{' keyVals:keyValExp* '}' _ { return helper.object(keyVals); }
+= '{' _ keyVals:keyValExp* _ '}' _ { return helper.object(keyVals); }
 
 keyValExp
 = key:keyExp _ ':' _ val:Expression _ keyValDelim? { return [ key, val ]; }
@@ -246,6 +374,7 @@ StringExp
 ************************************************************************/
 StringExp
 = '"' chars:doubleQuoteChar* '"' _ { return helper.string(chars); }
+/ "'" chars:singleQuoteChar* "'" _ { return helper.string(chars); }
 
 singleQuoteChar
 = '"'

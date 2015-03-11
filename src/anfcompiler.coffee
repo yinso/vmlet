@@ -23,15 +23,11 @@ override = (ast, compiler) ->
   types[ast.type] = compiler
 
 compile = (anf) ->
-  res = _compile anf 
+  res = _compile anf
   """
-  (function (_done) {
-    try {
-      #{res}
-    } catch (e) {
-      return _done(e);
-    }
-  })(_done)
+  (function () {
+    return #{res};
+  })()
   """
 
 _compile = (anf, buffer = new LineBuffer(), level = 0) ->
@@ -44,9 +40,14 @@ _compile = (anf, buffer = new LineBuffer(), level = 0) ->
 _compileANF = (anf, buffer, level) ->
   for item, i in anf.items
     _compile anf.items[i], buffer, level
+    buffer.push "; "
+    buffer.newline()
+
+register AST.get('anf'), _compileANF
+register AST.get('block'), _compileANF
 
 _compileOne = (ast, buffer, level) ->
-  #loglet.log '_complieOne', ast, level
+  loglet.log '_complieOne', ast, level
   compiler = get ast
   compiler ast, buffer, level
 
@@ -55,8 +56,12 @@ compileScalar = (ast, buffer, level) ->
 
 register AST.get('number'), compileScalar
 register AST.get('bool'), compileScalar
-register AST.get('null'), compileScalar
 register AST.get('string'), compileScalar
+
+compileNull = (ast, buffer, level) ->
+  buffer.push "null"
+
+register AST.get('null'), compileNull
 
 compileSymbol = (ast, buffer, level) ->
   buffer.push ast.val
@@ -78,13 +83,13 @@ register AST.get('binary'), compileBinary
 
 compileDefine = (ast, buffer, level) ->
   value = _compile ast.val, new LineBuffer(), level
-  buffer.push "_rt.define(#{JSON.stringify(ast.name)}, #{value});"
+  buffer.writeLine "_rt.define(#{JSON.stringify(ast.name)}, #{value});"
 
 register AST.get('define'), compileDefine
 
 compileTempVar = (ast, buffer, level) ->
   value = _compile ast.val, new LineBuffer(), level
-  buffer.push "var #{ast.name} = #{value};"
+  buffer.writeLine "var #{ast.name} = #{value};"
 
 register AST.get('tempvar'), compileTempVar
 
@@ -115,12 +120,15 @@ compileFuncall = (ast, buffer, level) ->
 register AST.get('funcall'), compileFuncall  
 
 compileMember = (ast, buffer, level) ->
+  buffer.push "_rt.member("
   _compileOne ast.head, buffer, level
-  key = _compile ast.key, new LineBuffer(), level
-  if AST.isa(ast.key, 'symbol')
-    buffer.push ".#{key}"
+  buffer.push ", "
+  if ast.key.type() == 'symbol'
+    buffer.push JSON.stringify(ast.key.val)
   else
-    buffer.push "[#{key}]"
+    key = _compile ast.key, new LineBuffer(), level
+    buffer.push key
+  buffer.push ")"
 
 register AST.get('member'), compileMember
 
@@ -148,47 +156,54 @@ compileArray = (ast, buffer, level) ->
 register AST.get('array'), compileObject
 
 compileProxyVal = (ast, buffer, level) ->
-  buffer.push "_rt.get("
-  buffer.push JSON.stringify(ast.name)
-  buffer.push ")"
+  buffer.push ast.compile()
 
 register AST.get('proxyval'), compileProxyVal
 
 compileReturn = (ast, buffer, level) ->
   val = ast.val
-  loglet.log 'compileReturn', ast, level, val.type()
-  if val.type() == 'funcall'
-    if level > 0
-      buffer.push "return _rt.tail("
-    else
-      buffer.push "return _rt.tco("
-    _compile val.funcall, buffer, level + 1
-    for arg in val.args 
-      buffer.push ", "
-      _compile arg, buffer, level + 1 
-  else if level > 0
-    buffer.push "return ("
-    _compile val, buffer, level + 1 # this didn't increase the counter??? 
-  else 
-    buffer.push "return _done(null, "
-    _compile val, buffer, level + 1 # this didn't increase the counter??? 
-  if level == 0 and val.type() == 'funcall'
-    buffer.push ", _done);"
-  else
-    buffer.push ");"
-  buffer.newline()
+  type = val.type()
+  buffer.push "return "
+  _compile val, buffer, level
+  buffer.push ";"
 
 register AST.get('return'), compileReturn 
 
 compileThrow = (ast, buffer, level) ->
   buffer.push "throw "
   _compile ast.val, buffer
-  buffer.push ";"
-  buffer.newline()
+  buffer.writeLine ";"
 
 register AST.get('throw'), compileThrow
 
+compileTry = (ast, buffer, level) ->
+  buffer.push "try { "
+  _compile ast.body, buffer, level + 1 
+  buffer.push " } "
+  for c in ast.catches
+    _compile c, buffer, level 
+  _compile ast.finally, buffer, level
+
+register AST.get('try'), compileTry
+
+compileCatch = (ast, buffer, level) ->
+  buffer.push "catch ("
+  _compile ast.param, buffer, level
+  buffer.push ") { "
+  _compile ast.body, buffer, level + 1
+  buffer.push "} "
+
+register AST.get('catch'), compileCatch
+
+compileFinally = (ast, buffer, level) ->
+  buffer.push "finally { "
+  _compile ast.body, buffer, level + 1
+  buffer.push "} "
+
+register AST.get('finally'), compileFinally
+
 compileIf = (ast, buffer, level) ->
+  loglet.log '--compileIf', ast
   condE = _compile ast.if, new LineBuffer(), level
   thenE = _compile ast.then, new LineBuffer(), level
   elseE = _compile ast.else, new LineBuffer(), level

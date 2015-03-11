@@ -74,7 +74,17 @@ param = (name) ->
 
 funcDecl = (name, params, body, returns = null) ->
   AST.make 'procedure', (if name then name.val else name), params, body, returns
-  
+
+taskDecl = (name, params, body, returns = null) ->
+  AST.make 'task', (if name then name.val else name), params, body, returns
+
+taskcall = (inner) ->
+  if AST.isa(inner, 'funcall')
+    # await is an async funcall...
+    AST.make 'taskcall', inner.funcall, inner.args
+  else
+    inner
+
 throwAST = (e) ->
   AST.make 'throw', e
 
@@ -103,6 +113,8 @@ module.exports =
   arguments: argsArray
   param: param
   function: funcDecl
+  task: taskDecl
+  taskcall: taskcall
   throw: throwAST
   try: tryAST
   catch: catchAST

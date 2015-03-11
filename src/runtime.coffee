@@ -6,10 +6,14 @@ Environment = require './environment'
 parser = require './parser'
 AST = require './ast'
 ANF = require './anf'
+CPS = require './cps'
 compiler = require './anfcompiler'
 baseEnv = require './baseenv'
+Unit = require './unit'
+util = require './util'
 
 Promise = require 'bluebird'
+fs = require 'fs'
 
 class CompileTimeEnvironment extends Environment
   constructor: (@inner) ->
@@ -19,18 +23,120 @@ class CompileTimeEnvironment extends Environment
     # we want it to return something that would be of substitute?
     # this doesn't work - we need something that says it's available as a SUPER_REF. i.e. not a LOCAL_REF
     # that are 
-    AST.make('proxyval', key, @inner.get(key))
+    AST.make('proxyval', key, 
+      @inner.get(key), 
+      (ast) ->
+        "_rt.get(#{JSON.stringify(ast.name)})"
+    )
+
+# a true way to deal with it is not to worry about full-case tail call optimization.
+# 
+#fs.readFile 'package.json', 'utf8', _sn.callback (err, res) ->
+#  if err
+#    _sn.callback(cb, err)
+#  else
+#    ...
+# the question is - how does this work with 
+
+class Session
+  constructor: (@cb) -> # this is the final callback - it might be passed in along the way...
+  result: (v) ->
+    {__vmlet_result: v}
+    #new Result v
+  isResult: (v) ->
+    #v instanceof Result
+    v?.__vmlet_result or (v != undefined and v != null)
+  unbind: (v) ->
+    if v?.__vmlet_result
+      v.__vmlet_result
+    else
+      v
+  tco: (func, args...) ->
+    funcall = @tail func, args...
+    while funcall.func != @cb 
+      res = funcall.func funcall.args...
+      if @isResult res
+        @cb null, @unbind res
+      else if res.func and res.args and res.cb 
+        return @tcoAsync res.fun, res.args..., res.cb
+      else if res.func and res.args
+        funcall = res
+    @cb null, funcall.args...
+  tcoAsync: (func, args..., cb) ->
+    # what 
+  tail: (func, args...) ->
+    {func: func, args: args}
+  # the key thing to keep in mind is that every async call is automatically at the tail position...
+  # what do we want to do here is to make sure that we can have them hooked correctly...
+  async: (func, args..., cb) ->
+    {func: func, args: args, cb: cb}
+
+# let's do most of the work in transformations!
+# i.e. the compiler should just be something that automates the process...
+
   
 class Runtime
   constructor: (@baseEnv = baseEnv) ->
     loglet.log 'Runtime.ctor'
     @parser = parser
     @compiler = compiler
-    @baseEnv.define 'console', console
+    @defineSync '+', (_rt) -> (a, b) -> a + b
+    @defineSync '-', (_rt) -> (a, b) -> a - b
+    @defineSync '*', (_rt) -> (a, b) -> a * b
+    @defineSync '%', (_rt) -> (a, b) -> a % b
+    @defineSync '>', (_rt) -> (a, b) -> a > b
+    @defineSync '>=', (_rt) -> (a, b) -> a >= b
+    @defineSync '<=', (_rt) -> (a, b) -> a <= b
+    @defineSync '<', (_rt) -> (a, b) -> a < b
+    @defineSync '==', (_rt) -> (a, b) -> a == b
+    @defineSync '!=', (_rt) -> (a, b) -> a != b
+    @defineSync 'isNumber', (_rt) ->
+      (a) -> 
+        typeof(a) == 'number' or a instanceof Number
+    @define 'console', 
+      log: @makeSync (_rt) -> 
+        (args...) ->
+          console.log args...
+          Unit.unit
+      time: @makeSync (_rt) -> 
+        (args...) ->
+          console.time args...
+          Unit.unit
+      timeEnd: @makeSync (_rt) -> 
+        (args...) ->
+          console.timeEnd args...
+          Unit.unit
+      debug: @makeSync (_rt) -> 
+        (args...) ->
+          console.debug args...
+          Unit.unit
+      error: @makeSync (_rt) -> 
+        (args...) ->
+          console.error args...
+          Unit.unit
+    # now the biggest challenge starts!
+    @define 'fs',
+      readFile: @makeAsync (_rt) ->
+        readFile = _rt.member(fs, 'readFile')
+        (filePath, options, cb) ->
+          return readFile filePath, options, cb
     @context = vm.createContext { _rt: @ , console: console , process: process }
     @compileEnv = new CompileTimeEnvironment @baseEnv
+  unit: Unit.unit
   define: (key, val) ->
-    @baseEnv.define key, val
+    baseEnv.define key, val
+  makeSync: (funcMaker) ->
+    func = funcMaker @
+    func.__vmlet = {sync: true}
+    func
+  makeAsync: (funcMaker) ->
+    func = funcMaker @
+    func.__vmlet = {async: true}
+    func
+  defineSync: (key, funcMaker) ->
+    @define key, @makeSync funcMaker
+  defineAsync: (key, funcMaker) ->
+    @define key, @makeAsync funcMaker
   eval: (stmt, cb) ->
     if stmt == ':context'
       return cb null, @context
@@ -42,46 +148,57 @@ class Runtime
       loglet.log '-------- Runtime.AST =>', ast
       anf = ANF.transform ast, @compileEnv 
       loglet.log '-------- Runtime.ANF =>', anf
-      compiled = @compiler.compile anf
+      cps = CPS.transform anf
+      loglet.log '-------- Runtime.CPS =>', cps
+      compiled = @compiler.compile cps
       loglet.log '-------- Runtime.compile =>', compiled
-      context = vm.createContext {_done: cb, _rt: @}
-      vm.runInContext compiled, context
-      ###
-      switch ast.type()
-        when 'define' # our goal is to create the things inside and make a definition.
-          @evalDefine ast.name, ast.val, cb
-        when 'funcall'
-          @evalFuncall ast, cb
-        else
-          @evalRun ast, cb
-      ###
+      compiler = vm.runInContext compiled, @context
+      loglet.log '-------- Runtime.compiler =>', compiler
+      try 
+        compiler @, (err, res) =>
+          if err 
+            cb err
+          else if res instanceof Unit
+            cb null
+          else if @isResult(res)
+            cb null, @unbind(res)
+          else
+            cb err, res
+      catch e
+        cb e
     catch e
       cb e
   get: (key) ->
     @baseEnv.get key
-  bind: (obj, func) ->
-    (args...) ->
-      obj[func] args...
-  tail: (func, args...) ->
-    if func instanceof Promise
-      return func
-    #loglet.log '^^^^^^^^^^^^^^^^^^^^ RT.__tail', func, args
-    lastArg = args[args.length - 1]
-    isLastArgFunc = typeof(lastArg) == 'function' or lastArg instanceof Function
-    cb = if isLastArgFunc then lastArg else () ->
-    if func.__vmlet?.async
-      if isLastArgFunc
-        args.pop()
-      p = new Promise (ok, fail) ->
-        func args..., (err, res) ->
-          if err 
-            fail err
-          else
-            ok res 
-      p.next = cb
-      p
+  member: (obj, key) ->
+    member = obj[key]
+    if util.isFunction(member)
+      (args...) ->
+        obj[key] args...
     else
-      return {tail: func, args: args, cb: cb}
+      member
+  promise: (func, args..., cb) ->
+    loglet.log '_rt.promise', func, args, cb
+    #p = Promise.defer()
+    p = new Promise (ok, fail) ->
+      func args..., (err, res) ->
+        loglet.log '_rt.promise.call', err, res
+        if err 
+          fail err
+        else
+          ok res
+    #.then (v) -> 
+    #  loglet.log '_rt.promise.ok', v
+    #  cb null, v
+    #.catch (e) -> 
+    #  loglet.log '_rt.promise.reject', e
+    #  cb e
+    p.next = cb
+    p
+  tailAsync: (func, args..., cb) ->
+    {tail: func, args: args, cb: cb}
+  tail: (func, args...) ->
+    {tail: func, args: args}
   result: (v) ->
     {__vmlet_result: v}
     #new Result v
@@ -94,8 +211,12 @@ class Runtime
     else
       v
   tco: (func, args..., cb) ->
-    if not (typeof(func) == 'function' or func instanceof Function)
-      cb null, func
+    # does this part make sense??? not too sure... hmm....
+    if not util.isFunction(func)
+      if func instanceof Unit
+        cb null
+      else
+        cb null, func
     else
       @_tco func, args, cb
   while: (cond, ifTrue, ifFalse) ->
@@ -108,31 +229,39 @@ class Runtime
       else 
         return self.while cond, ifTrue, ifFalse, cb
   _tco: (func, args, cb) ->
-    args.push cb 
-    tail = {tail: func, args: args, cb: cb}
-    while cb != tail.tail
+    if func.__vmlet?.async
+      args.push cb 
+    funcall = {tail: func, args: args, cb: cb}
+    while cb != funcall.tail
       #loglet.log ',,,,,,,,,,,,,,,,,,,,,,,,,RT._tco', tail
       # what happens with an error here? 
       # if there is an error here it's *unhandled* -> apparently
       try 
-        res = tail.tail tail.args...
-        if res instanceof Promise
+        res = funcall.tail funcall.args...
+        if res?.tail and res?.cb # this is an tailAsync result...
           return @_tcoAsync res, cb
-        else if res?.tail and res?.cb
-          tail = res 
+        else if res?.tail 
+          funcall = res 
         else if @isResult(res)
+          if res instanceof Unit
+            return cb null
           return cb null, @unbind res
         else
           return cb errorlet.create {error: 'invalid_tco_function_return', value: res}
       catch e 
         return cb e
     return tail.tail tail.args...
-  _tcoAsync: (promise, cb) ->
+  tcoAsync: (func, args..., cb) ->
     self = @
-    promise.then (res) ->
-      self._tco promise.next, [ null , res ], cb
-    .catch (err) ->
-      self._tco promise.next, [ err , null ], cb
+    funcall.tail funcall.args..., (err, res) ->
+      if err 
+        cb err
+      else
+        
+  _tcoAsync: (funcall, cb) ->
+    self = @
+    funcall.tail funcall.args..., (err, res) ->
+  
   
 
 module.exports = Runtime

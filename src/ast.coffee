@@ -22,6 +22,7 @@ class AST
   _equals: (v) -> v.val == @val
   isa: (v, type) ->
     v instanceof AST.get(type)
+  isAsync: () -> false
   type: () ->
     @constructor.type
   inspect: () ->
@@ -43,6 +44,8 @@ AST.register class BOOL extends AST
 AST.register class NULL extends AST
   @type: 'null'
   @NULL = new NULL(true)
+  toString: () ->
+    "{NULL}"
 
 AST.register class NUMBER extends AST
   @type: 'number'
@@ -54,6 +57,13 @@ AST.register class MEMBER extends AST
     @head.equals(v.head) and @key == v.key
   toString: () ->
     "{MEMBER #{@head} #{@key}}"
+
+AST.register class UNIT extends AST
+  @type: 'unit'
+  constructor: () ->
+  _equals: (v) -> true
+  toString: () ->
+    "{UNIT}"
 
 AST.register class OBJECT extends AST
   @type: 'object'
@@ -127,6 +137,11 @@ AST.register class BLOCK extends AST
       true
     else
       false 
+  isAsync: () ->
+    for item in @items
+      if item.isAsync()
+        true
+    false
   toString: () ->
     buffer = []
     buffer.push '{BLOCK'
@@ -174,13 +189,42 @@ AST.register class PROCEDURE extends AST
   toString: () ->
     "{PROCEDURE #{@name} #{@params} #{@body} #{@returns}}"
 
+AST.register class TASK extends AST
+  @type: 'task'
+  constructor: (@name, @params, @body, @returns = null) ->
+  _equals: (v) ->
+    if @name == @name
+      for param, i in @params
+        if not param.equals(v.params[i])
+          return false
+      @body.equals(v.body)
+    else
+      false
+  isAsync: () ->
+    @body.isAsync()
+  toString: () ->
+    "{TASK #{@name} #{@params} #{@body} #{@returns}}"
+
 AST.register class IF extends AST
   @type: 'if'
   constructor: (@if, @then, @else) ->
   _equals: (v) ->
     @if.equals(v.if) and @then.equals(v.then) and @else.equals(v.else)
+  isAsync: () ->
+    @then.isAsync() or @else.isAsync()
   toString: () ->
     "{IF #{@if} #{@then} #{@else}}"
+
+# this is meant for transformation rather than input...
+AST.register class WHILE extends AST
+  @type: 'while'
+  constructor: (@cond, @block) ->
+  _equals: (v) ->
+    @cond.equals(v.cond) and @block.equals(v.block)
+  isAsync: () ->
+    @cond.isAsync() or @block.isAsync()
+  toString: () ->
+    "{WHILE #{@cond} #{@block}}"
 
 AST.register class FUNCALL extends AST
   @type: 'funcall'
@@ -201,11 +245,20 @@ AST.register class FUNCALL extends AST
   toString: () ->
     "{FUNCALL #{@funcall} #{@args}}"
 
+AST.register class TASKCALL extends FUNCALL
+  @type: 'taskcall'
+  isAsync: () ->
+    true
+  toString: () ->
+    "{TASKCALL #{@funcall} #{@args}}"
+
 AST.register class DEFINE extends AST
   @type: 'define'
   constructor: (@name, @val) ->
   _equals: (v) ->
     @name == v.name and @val.equals(v.val)
+  isAsync: () ->
+    @val.isAsync()
   toString: () ->
     "{DEFINE #{@name} #{@val}}"
 
@@ -214,12 +267,20 @@ AST.register class TEMPVAR extends AST
   constructor: (@name, @val) ->
   _equals: (v) ->
     @name == v.name and @val.equals(v.val)
+  isAsync: () ->
+    @val.isAsync()
   toString: () ->
     "{TEMPVAR #{@name} #{@val}}"
 
 AST.register class PROXYVAL extends AST
   @type: 'proxyval'
-  constructor: (@name, @val) ->
+  constructor: (@name, @val, @_compile = null) ->
+  # compile is used by compiler to generate the final text.
+  compile: () ->
+    if @_compile
+      @_compile(@)
+    else
+      @name # returning the name is the default.
   _equals: (v) ->
     @name == v.name and @val.equals(v.val)
   toString: () ->
@@ -227,6 +288,8 @@ AST.register class PROXYVAL extends AST
 
 AST.register class RETURN extends AST
   @type: 'return'
+  isAsync: () ->
+    @val.isAsync()
 
 AST.register class BINARY extends AST
   @type: 'binary'
@@ -244,6 +307,8 @@ AST.register class CATCH extends AST
   constructor: (@param, @body) ->
   _equals: (v) ->
     @param.equals(v.param) and @body.equals(v.body)
+  isAsync: () ->
+    @body.isAsync()
   toString: () ->
     "{CATCH #{@param} #{@body}}"
 
@@ -252,20 +317,22 @@ AST.register class FINALLY extends AST
   constructor: (@body) ->
   _equals: (v) ->
     @body.equals(v.body)
+  isAsync: () ->
+    @body.isAsync()
   toString: () ->
     "{FINALLY #{@body}}"
 
 AST.register class TRY extends AST 
   @type: 'try'
-  constructor: (@body, @catch = [], @finally = null) ->
+  constructor: (@body, @catches = [], @finally = null) ->
   _equals: (v) ->
     if not @body.equals(v.body)
       return false
-    if not @catch.length == v.catch.length
+    if not @catches.length == v.catches.length
       return false
-    for i in [0...@catch.length]
-      c1 = @catch[i]
-      c2 = v.catch[i]
+    for i in [0...@catches.length]
+      c1 = @catches[i]
+      c2 = v.catches[i]
       if not c1.equals(c2)
         return false
     if @finally and v.finally
@@ -274,6 +341,14 @@ AST.register class TRY extends AST
       true
     else
       false
+  isAsync: () ->
+    if @body.isAsync() 
+      true
+    else 
+      for c in @catches
+        if c.isAsync()
+          true
+      @finally.isAsync()
   toString: () ->
     "{TRY #{@body} #{@catch} #{@finally}}"
 
