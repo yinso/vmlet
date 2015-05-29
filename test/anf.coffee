@@ -19,107 +19,97 @@ describe 'anf test', ->
         loglet.error e
         done e
   
-  canTransform AST.make('number', 1), undefined
-  canTransform AST.make('binary', '*', AST.make('binary', '+', AST.make('number', 1), AST.make('number', 2)), AST.make('number', 3)), undefined
-  canTransform AST.make('if', 
-      AST.make('binary', '==', AST.make('string', 'hello'), AST.make('string', 'world')),
-      AST.make('binary', '+', 
-        AST.make('number', 5), 
-        AST.make('binary', '-', 
-          AST.make('number', 8), 
-          AST.make('number', 11)
+  canTransform AST.number(1), undefined
+  canTransform AST.binary('*', AST.binary('+', AST.number(1), AST.number(2)), AST.number(3)), undefined
+  canTransform AST.if(AST.binary('==', AST.string('hello'), AST.string('world')),
+      AST.binary('+', 
+        AST.number(5), 
+        AST.binary('-', 
+          AST.number(8), 
+          AST.number(11)
         )
       ),
-      AST.make('binary', '%', AST.make('number', 10), AST.make('number', 7))
+      AST.binary('%', AST.number(10), AST.number(7))
     ), undefined
-  canTransform AST.make('block',
-      [ 
-        AST.make('number', 1)
-        AST.make('number', 2)
-        AST.make('number', 10)
-        AST.make('binary', '+', 
-          AST.make('number', 5), 
-          AST.make('binary', '-', 
-            AST.make('number', 8), 
-            AST.make('number', 11)
+  canTransform AST.block([ 
+        AST.number(1)
+        AST.number(2)
+        AST.number(10)
+        AST.binary('+', 
+          AST.number(5), 
+          AST.binary('-', 
+            AST.number(8), 
+            AST.number(11)
           )
         )
       ]
     ), undefined
   
-  canTransform AST.make('define',
-      'foo',
-      AST.make('binary', '+', 
-        AST.make('number', 5), 
-        AST.make('binary', '-', 
-          AST.make('number', 8), 
-          AST.make('number', 11)
+  canTransform AST.define('foo',
+      AST.binary('+', 
+        AST.number(5), 
+        AST.binary('-', 
+          AST.number(8), 
+          AST.number(11)
         )
       )
     )
   
-  canTransform AST.make('object',
-      [
+  canTransform AST.object([
         [
           'foo'
-          AST.make('binary', '-', 
-            AST.make('number', 8), 
-            AST.make('number', 11)
+          AST.binary('-', 
+            AST.number(8), 
+            AST.number(11)
           )
         ]
         [
           'bar'
-          AST.make('number', 2)
+          AST.number(2)
         ]
       ]
     )
-  canTransform AST.make('array',
-      [
-        AST.make('binary', '-', 
-          AST.make('number', 8), 
-          AST.make('number', 11)
+  canTransform AST.array([
+        AST.binary('-', 
+          AST.number(8), 
+          AST.number(11)
         ),
-        AST.make('number', 2)
+        AST.number(2)
       ]
     )
-  canTransform AST.make('block',
-    [
-      AST.make('define', 
-        'obj',
-        AST.make('object',
-          [
+  canTransform AST.block([
+      AST.define('obj',
+        AST.object([
             [
               'foo'
-              AST.make('binary', '-', 
-                AST.make('number', 8), 
-                AST.make('number', 11)
+              AST.binary('-', 
+                AST.number(8), 
+                AST.number(11)
               )
             ]
             [
               'bar'
-              AST.make('number', 2)
+              AST.number(2)
             ]
           ]
         )
       ),
-      AST.make('member', AST.make('symbol', 'obj'), AST.make('symbol', 'foo'))
+      AST.member(AST.symbol('obj'), AST.symbol('foo'))
     ]
   )
   
-  canTransform AST.make('funcall',
-    AST.make('symbol', 'isNumber'),
+  canTransform AST.funcall(AST.symbol('isNumber'),
     [
-      AST.make('number', 1500)
+      AST.number(1500)
     ]
   )
   
-  canTransform AST.make('procedure',
-    'foo',
+  canTransform AST.procedure('foo',
     [
-      AST.make('param', 'a')
-      AST.make('param', 'b')
+      AST.param('a')
+      AST.param('b')
     ],
-    AST.make('binary', '+', AST.make('symbol', 'a'), AST.make('symbol', 'b'))
+    AST.binary('+', AST.symbol('a'), AST.symbol('b'))
   )
   
   

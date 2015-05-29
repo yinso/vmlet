@@ -5,16 +5,21 @@ errorlet = require 'errorlet'
 Environment = require './environment'
 parser = require './parser'
 AST = require './ast'
+RESOLVER = require './resolver'
 ANF = require './anf'
+LOCAL = require './local'
+RET = require './return'
 CPS = require './cps'
 compiler = require './anfcompiler'
 baseEnv = require './baseenv'
 Unit = require './unit'
 util = require './util'
+LexicalEnvironment = require './lexical'
 
 Promise = require 'bluebird'
 fs = require 'fs'
 
+###
 class CompileTimeEnvironment extends Environment
   constructor: (@inner) ->
   has: (key) ->
@@ -28,7 +33,7 @@ class CompileTimeEnvironment extends Environment
       (ast) ->
         "_rt.get(#{JSON.stringify(ast.name)})"
     )
-
+###
 # a true way to deal with it is not to worry about full-case tail call optimization.
 # 
 #fs.readFile 'package.json', 'utf8', _sn.callback (err, res) ->
@@ -80,19 +85,19 @@ class Runtime
     loglet.log 'Runtime.ctor'
     @parser = parser
     @compiler = compiler
-    @defineSync '+', (_rt) -> (a, b) -> a + b
-    @defineSync '-', (_rt) -> (a, b) -> a - b
-    @defineSync '*', (_rt) -> (a, b) -> a * b
-    @defineSync '%', (_rt) -> (a, b) -> a % b
-    @defineSync '>', (_rt) -> (a, b) -> a > b
-    @defineSync '>=', (_rt) -> (a, b) -> a >= b
-    @defineSync '<=', (_rt) -> (a, b) -> a <= b
-    @defineSync '<', (_rt) -> (a, b) -> a < b
-    @defineSync '==', (_rt) -> (a, b) -> a == b
-    @defineSync '!=', (_rt) -> (a, b) -> a != b
-    @defineSync 'isNumber', (_rt) ->
-      (a) -> 
-        typeof(a) == 'number' or a instanceof Number
+#    @defineSync '+', (_rt) -> (a, b) -> a + b
+#    @defineSync '-', (_rt) -> (a, b) -> a - b
+#    @defineSync '*', (_rt) -> (a, b) -> a * b
+#    @defineSync '%', (_rt) -> (a, b) -> a % b
+#    @defineSync '>', (_rt) -> (a, b) -> a > b
+#    @defineSync '>=', (_rt) -> (a, b) -> a >= b
+#    @defineSync '<=', (_rt) -> (a, b) -> a <= b
+#    @defineSync '<', (_rt) -> (a, b) -> a < b
+#    @defineSync '==', (_rt) -> (a, b) -> a == b
+#    @defineSync '!=', (_rt) -> (a, b) -> a != b
+#    @defineSync 'isNumber', (_rt) ->
+#      (a) -> 
+#        typeof(a) == 'number' or a instanceof Number
     @define 'console', 
       log: @makeSync (_rt) -> 
         (args...) ->
@@ -118,10 +123,9 @@ class Runtime
     @define 'fs',
       readFile: @makeAsync (_rt) ->
         readFile = _rt.member(fs, 'readFile')
-        (filePath, options, cb) ->
-          return readFile filePath, options, cb
+        (args...) ->
+          return readFile args...
     @context = vm.createContext { _rt: @ , console: console , process: process }
-    @compileEnv = new CompileTimeEnvironment @baseEnv
   unit: Unit.unit
   define: (key, val) ->
     baseEnv.define key, val
@@ -145,15 +149,21 @@ class Runtime
     try 
       loglet.log '-------- Runtime.eval =>', stmt
       ast = @parser.parse stmt 
-      loglet.log '-------- Runtime.AST =>', ast
-      anf = ANF.transform ast, @compileEnv 
-      loglet.log '-------- Runtime.ANF =>', anf
-      cps = CPS.transform anf
-      loglet.log '-------- Runtime.CPS =>', cps
-      compiled = @compiler.compile cps
-      loglet.log '-------- Runtime.compile =>', compiled
+      loglet.log '-------- Runtime.parsed =>', ast
+      ast = RESOLVER.transform ast, new LexicalEnvironment()
+      loglet.log '-------- Runtime.transformed =>', ast
+      #ast = ANF.transform ast
+      #loglet.log '-------- Runtime.anffed =>', ast
+      #ast = LOCAL.transform ast
+      #loglet.log '-------- Runtime.localed =>', ast
+      #ast = RET.transform ast 
+      #loglet.log '-------- Runtime.retted =>', ast
+      ast = CPS.transform ast
+      loglet.log '-------- Runtime.cpsed =>', ast.type()
+      compiled = @compiler.compile ast
+      loglet.log '-------- Runtime.compiled =>', compiled
       compiler = vm.runInContext compiled, @context
-      loglet.log '-------- Runtime.compiler =>', compiler
+      loglet.log '-------- Runtime.evaled =>', compiler
       try 
         compiler @, (err, res) =>
           if err 

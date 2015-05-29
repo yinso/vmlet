@@ -23,6 +23,7 @@ class Environment
       throw {error: 'duplicate_definition', name: key}
     else
       @inner[key] = val
+      val
   undefine: (key) ->
     if @inner.hasOwnProperty(key)
       delete @inner[key]

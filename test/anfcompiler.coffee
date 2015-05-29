@@ -18,91 +18,81 @@ describe 'anf compiler test', ->
       catch e
         done e
   
-  canCompile AST.make('number', 5)
-  canCompile AST.make('bool', true)
-  canCompile AST.make('string', 'hello world')
-  canCompile AST.make('binary', '+', AST.make('number', 10), AST.make('number', 5))
-  canCompile AST.make('binary', '*', 
-    AST.make('binary', '+', AST.make('number', 10), AST.make('number', 5)), 
-    AST.make('number', 5)
+  canCompile AST.number(5)
+  canCompile AST.bool(true)
+  canCompile AST.string('hello world')
+  canCompile AST.binary('+', AST.number(10), AST.number(5))
+  canCompile AST.binary('*', 
+    AST.binary('+', AST.number(10), AST.number(5)), 
+    AST.number(5)
   )
-  canCompile AST.make('procedure',
-    'foo',
+  canCompile AST.procedure('foo',
     [
-      AST.make('param', 'a')
-      AST.make('param', 'b')
+      AST.param('a')
+      AST.param('b')
     ]
-    AST.make('binary', '+', AST.make('symbol', 'a'), AST.make('symbol', 'b'))
+    AST.binary('+', AST.symbol('a'), AST.symbol('b'))
   )
-  canCompile AST.make('funcall', 
-    AST.make('symbol', 'isNumber'),
+  canCompile AST.funcall(AST.symbol('isNumber'),
     [
-      AST.make('number', 5)
+      AST.number(5)
     ]
   )
-  canCompile AST.make('object',
-    [
+  canCompile AST.object([
       [
         'foo'
-        AST.make('number', 1)
+        AST.number(1)
       ]
       [
         'bar'
-        AST.make('string', 'hello')
+        AST.string('hello')
       ]
     ]
   )
-  canCompile AST.make('member',
-    AST.make('object',
-      [
+  canCompile AST.member(AST.object([
         [
           'foo'
-          AST.make('number', 1)
+          AST.number(1)
         ]
         [
           'bar'
-          AST.make('string', 'hello')
+          AST.string('hello')
         ]
       ]
     ),
-    AST.make('symbol', 'foo')
+    AST.symbol('foo')
   )
-  canCompile AST.make('member',
-    AST.make('object',
-      [
+  canCompile AST.member(AST.object([
         [
           'foo'
-          AST.make('number', 1)
+          AST.number(1)
         ]
         [
           'bar'
-          AST.make('string', 'hello')
+          AST.string('hello')
         ]
       ]
     ),
-    AST.make('string', 'foo')
+    AST.string('foo')
   )
-  canCompile AST.make('member',
-    AST.make('object',
-      [
+  canCompile AST.member(AST.object([
         [
           'foo'
-          AST.make('number', 1)
+          AST.number(1)
         ]
         [
           'bar'
-          AST.make('string', 'hello')
+          AST.string('hello')
         ]
       ]
     ),
-    AST.make('number', 5)
+    AST.number(5)
   )
-  canCompile AST.make('if',
-    AST.make('binary','==',
-      AST.make('number', 5),
-      AST.make('number', 10)
+  canCompile AST.if(AST.binary('==',
+      AST.number(5),
+      AST.number(10)
     ),
-    AST.make('binary', '+', AST.make('number', 10), AST.make('number', 5)), 
-    AST.make('binary', '-', AST.make('number', 10), AST.make('number', 5))
+    AST.binary('+', AST.number(10), AST.number(5)), 
+    AST.binary('-', AST.number(10), AST.number(5))
   )
   

@@ -2,7 +2,6 @@
 loglet = require 'loglet'
 errorlet = require 'errorlet'
 
-ANF = require './anf'
 AST = require './ast'
 util = require './util'
 
@@ -93,7 +92,7 @@ That means until we can do so, we are stuck with one of the approaches...
 ###
 
 
-cps = (anf, contAST = AST.make('symbol', '_done'), cbAST = contAST) ->
+cps = (anf, contAST = AST.symbol('_done'), cbAST = contAST) ->
   # the idea is that the last statement is the one that we want to return? 
   # so if we push the return function in like this... what would happen? 
   # {NUMBER 1}
@@ -103,22 +102,23 @@ cps = (anf, contAST = AST.make('symbol', '_done'), cbAST = contAST) ->
   # {ANF {RETURN {FUNCALL {SYMBOL CB} {NULL} {NUMBER 1}}}}
   # 
   # when compile the return function -> 
-  ast = AST.make('task', undefined,
-    [ AST.make('param', '_rt')]
+  ast = AST.task(undefined,
+    [ AST.param('_rt')]
     , anf
   )
   _cpsOne ast, contAST, cbAST
-  
+
+
 cpsBlock = (anf, contAST, cbAST) ->
   for i in [anf.items.length - 1 ..0] by -1
     contAST = _cpsOne anf.items[i], contAST, cbAST
   normalize contAST
 
 register AST.get('block'), cpsBlock
-register AST.get('anf'), cpsBlock
+#register AST.get('anf'), cpsBlock
 
 _cpsOne = (item, contAST, cbAST) ->
-  loglet.log '_cpsOne', item, contAST, cbAST
+  #loglet.log '--cps.one', item, contAST, cbAST
   cpser = get item
   cpser item, contAST, cbAST
 
@@ -128,17 +128,16 @@ cpsTaskcall = (ast, contAST, cbAST) ->
     args.push contAST
   else
     args.push makeCallback contAST, cbAST
-  AST.make('return', AST.make('funcall', ast.funcall, args))
+  AST.return(AST.funcall(ast.funcall, args))
 
 register AST.get('taskcall'), cpsTaskcall
 
 cpsTask = (ast, contAST, cbAST) ->
   # the idea of cpsing task is that we want to cps the body.
-  cbAST = AST.make('symbol', '_done')
+  cbAST = AST.symbol('_done')
   body = normalize ast.body
   params = [].concat(ast.params).concat(cbAST)
-  AST.make('procedure',
-    ast.name,
+  AST.procedure(ast.name,
     params,
     _cpsOne(body, cbAST, cbAST)
   )
@@ -148,76 +147,90 @@ register AST.get('task'), cpsTask
 combine = (ast, contAST) ->
   if not contAST
     ast
-  else if ANF.isANF(contAST)
+  else if contAST.type() == 'block'
     contAST.items.unshift ast
     contAST
   else
-    new ANF.ANF [ ast, contAST ]
+    AST.block [ ast, contAST ]
 
 concat = (ast1, ast2) ->
-  is1anf = ANF.isANF(ast1)
-  is2anf = ANF.isANF(ast2)
-  loglet.log 'concat', ast1, ast2, is1anf, is2anf
+  is1anf = ast1.type() == 'block'
+  is2anf = ast2.type() == 'block'
   if is1anf
-    new ANF.ANF ast1.items.concat(if is2anf then ast2.items else [ ast2 ])
+    AST.block ast1.items.concat(if is2anf then ast2.items else [ ast2 ])
   else
-    new ANF.ANF [ ast1 ].concat(if is2anf then ast2.items else [ ast2 ])
+    AST.block [ ast1 ].concat(if is2anf then ast2.items else [ ast2 ])
 
 normalize = (ast) ->
-  if ANF.isANF(ast)
+  if ast.type() == 'block'
     ast
   else
-    new ANF.ANF [ ast ]
+    AST.block [ ast ]
 
-makeCallback = (contAST, cbAST, resParam = AST.make('param', 'res')) ->
+makeCallback = (contAST, cbAST, resParam = AST.param('res')) ->
   if contAST == cbAST
     contAST
   else
     # this part needs to be ANF-ized...
-    AST.make('procedure', undefined,
+    AST.procedure(undefined,
       [
-        AST.make('param', 'err')
+        AST.param('err')
         resParam
       ],
-      AST.make('if',
-        AST.make('symbol', 'err'),
-        AST.make('return', AST.make('funcall', cbAST, [ AST.make('symbol', 'err') ])),
+      ASTcond(AST.symbol('err'),
+        AST.return(AST.funcall(cbAST, [ AST.symbol('err') ])),
         contAST
       )
     )
 
+cpsLocal = (ast, contAST, cbAST) ->
+  #loglet.log "--cps.local", ast, contAST
+  if ast.isAsync()
+    _cpsOne ast.value, makeCallback(contAST, cbAST, AST.param(ast.name)), cbAST
+  else
+    head = AST.local _cpsOne(ast.value, null, null), ast.init
+    combine head, contAST
+
+register AST.get('local'), cpsLocal
+
+cpsAssign = (ast, contAST, cbAST) ->
+  #loglet.log "--cps.assign", ast, contAST
+  if ast.isAsync()
+    _cpsOne ast.value, makeCallback(contAST, cbAST, AST.param(ast.name)), cbAST
+  else
+    head = AST.assign ast.name, _cpsOne(ast.value, null, null)
+    combine head, contAST
+
+register AST.get('assign'), cpsAssign
+
 makeCpsDef = (type) ->
   (ast, contAST, cbAST) ->
-    loglet.log "--cps.#{type}", ast, contAST
+    #loglet.log "--cps.#{type}", ast, contAST
     if ast.isAsync()
-      _cpsOne ast.val, makeCallback(contAST, cbAST, AST.make('param', ast.name)), cbAST
+      _cpsOne ast.value, makeCallback(contAST, cbAST, AST.param(ast.name)), cbAST
     else
       head = AST.make(type, 
         ast.name,
-        _cpsOne(ast.val, null, null)
+        _cpsOne(ast.value, null, null)
       )
       combine head, contAST
-    
-cpsTempvar = makeCpsDef('tempvar')
 
-register AST.get('tempvar'), cpsTempvar
+#cpsTempvar = makeCpsDef('tempvar')
+#register AST.get('tempvar'), cpsTempvar
 
 cpsDefine = makeCpsDef('define')
-
 register AST.get('define'), cpsDefine
 
 cpsReturn = (ast, contAST, cbAST) ->
   #type = exp.type() # for dealing with none 
-  loglet.log 'cpsReturn', ast, contAST
-  val = ast.val
+  #loglet.log '--cps.return', ast, contAST
+  val = ast.value
   if val.type() == 'taskcall'
     cpsTaskcall val, contAST, cbAST
   #else if val.type() == 'task'
     # the idea here is that we want to compile a single value...
   else
-    AST.make('return',
-      AST.make('funcall',
-        cbAST,
+    AST.return(AST.funcall(cbAST,
         [ 
           AST.make('null')
           _cpsOne(val, null, null)
@@ -229,9 +242,8 @@ cpsReturn = (ast, contAST, cbAST) ->
 register AST.get('return'), cpsReturn
 
 cpsIf = (ast, contAST, cbAST) ->
-  loglet.log 'cpsIf', ast
-  AST.make('if',
-    ast.if,
+  #loglet.log '--cps.if', ast
+  AST.if(ast.cond,
     _cpsOne(ast.then, contAST, cbAST),
     _cpsOne(ast.else, contAST, cbAST)
   )
@@ -257,20 +269,20 @@ register AST.get('object'), cpsScalar
 
 # this is not the way it should have worked... what the heck...!
 cpsThrow = (ast, contAST, cbAST) ->
-  AST.make 'return', AST.make('funcall', cbAST, [ ast.val ])
+  AST.return AST.funcall(cbAST, [ ast.value ])
 
 register AST.get('throw'), cpsThrow
 
 makeErrorHandler = (catchExp, finallyExp, cbAST, name) ->
-  loglet.log 'cps.makeErrorHandler', catchExp.body, finallyExp.body, cbAST
+  #loglet.log '--cps.makeErrorHandler', catchExp.body, finallyExp.body, cbAST
   body = concat finallyExp.body, catchExp.body
   body = _cpsOne body, cbAST, cbAST
-  AST.make 'tempvar', name, AST.make('procedure', undefined, [ catchExp.param ], body)
+  AST.local AST.ref name, AST.procedure(undefined, [ catchExp.param ], body)
 
 cpsTry = (ast, contAST, cbAST) ->
   name = '__handleError$1'
   errorAST = makeErrorHandler ast.catches[0], ast.finally, cbAST, name
-  cbAST = AST.make 'ref', name
+  cbAST = AST.ref name
   bodyAST = _cpsOne ast.body, contAST, cbAST
   combine errorAST, bodyAST
 
@@ -278,7 +290,7 @@ register AST.get('try'), cpsTry
 
 cpsCatch = (ast, contAST, cbAST) ->
   body = _cpsOne ast.body, contAST, cbAST
-  AST.make 'catch', ast.param, body
+  AST.catch ast.param, body
 
 register AST.get('catch'), cpsCatch
 

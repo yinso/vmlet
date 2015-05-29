@@ -68,6 +68,12 @@ DefineExp
 ************************************************************************/
 DefineExp
 = 'define' _ id:SymbolExp _ '=' _ exp:Expression _ { return helper.define(id, exp); }
+/ 'define' _ functionDeclHeadExp _ id:SymbolExp _ params:funcParametersExp _ exp:Expression {
+  return helper.define(id, helper.function(id, params, exp));
+}
+/ taskDeclHeadExp _ id:SymbolExp _ params:funcParametersExp _ exp:TaskExpression { 
+  return helper.define(id, helper.task(id, params,exp)); 
+}
 
 /************************************************************************
 FunctionDeclExp
@@ -82,7 +88,7 @@ funcParametersExp
 = '(' _ params:funcParameterExp* _ ')' _ { return params; }
 
 funcParameterExp
-= param:SymbolExp _ ','? _ { return helper.param(param.val); }
+= param:SymbolExp _ ','? _ { return helper.param(param.value); }
 
 /************************************************************************
 TaskDeclExp
@@ -97,7 +103,7 @@ funcParametersExp
 = '(' _ params:funcParameterExp* _ ')' _ { return params; }
 
 funcParameterExp
-= param:SymbolExp _ ','? _ { return helper.param(param.val); }
+= param:SymbolExp _ ','? _ { return helper.param(param.value); }
 
 TaskExpression
 = IfTaskExp
@@ -357,7 +363,7 @@ keyValDelim
 = ',' _ { return ',' }
 
 keyExp
-= s:SymbolExp { return s.val; }
+= s:SymbolExp { return s.value; }
 / s:StringExp { return s; }
 
 /************************************************************************

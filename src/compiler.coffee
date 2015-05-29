@@ -43,7 +43,7 @@ compileOne = (ast, env, code = new CodeBlock(), isTail = false) ->
     throw errorlet.create {error: 'unsupported_ast_type', ast: ast}
 
 compileScalar = (ast, env, code, isTail) ->
-  code.push(ast.val)
+  code.push(ast.value)
   code
 
 register AST.get('bool'), compileScalar
@@ -66,7 +66,7 @@ compileBlock = (ast, env, code, isTail) ->
 register AST.get('block'), compileBlock
 
 compileIf = (ast, env, code, isTail) ->
-  condCode = compileOne ast.if, env
+  condCode = compileOne astcond, env
   thenCode = compileOne ast.then, env, new CodeBlock(), isTail
   elseCode = compileOne ast.else, env, new CodeBlock(), isTail
   code.append(condCode)
@@ -89,9 +89,9 @@ compileFuncall = (ast, env, code, isTail) ->
 register AST.get('funcall'), compileFuncall
 
 compileIdentifier = (ast, env, code, isTail) ->
-  if not env.has(ast.val)
-    throw errorlet.create {error: 'compileIdentifier:unknown_identifier', id: ast.val}
-  object = env.get ast.val
+  if not env.has(ast.value)
+    throw errorlet.create {error: 'compileIdentifier:unknown_identifier', id: ast.value}
+  object = env.get ast.value
   if object instanceof Ref
     code.ref(object.name)
   else
@@ -102,7 +102,7 @@ register AST.get('symbol'), compileIdentifier
 compileDefine = (ast, env, code, isTail) ->
   if env.has ast.name
     throw errorlet.crate {error: 'compileDefine:duplicate_definition', name: ast.name}
-  valCode = compile ast.val, env
+  valCode = compile ast.value, env
   code.append(valCode)
     .define(ast.name)
 
@@ -211,7 +211,7 @@ _compileCatchClauses = (catches, env) ->
 register AST.get('catch'), compileCatch
 
 compileThrow = (ast, env, code, isTail) ->
-  body = compileOne ast.val, env
+  body = compileOne ast.value, env
   code
     .append(body)
     .throw()
@@ -253,22 +253,22 @@ register AST.get('try'), compileTry
 compileObject = (ast, env, code, isTail) ->
   helper = (valAST) ->
     compile valAST, env
-  for [key, valAST] in ast.val
+  for [key, valAST] in ast.value
     code.push(key)
       .append(helper(valAST))
-  code.object(ast.val.length * 2)
+  code.object(ast.value.length * 2)
 
 register AST.get('object'), compileObject
 
 compileArray = (ast, env, code, isTail) ->
-  for itemAST in ast.val
+  for itemAST in ast.value
     code.append(compile(itemAST, env))
-  code.array(ast.val.length)
+  code.array(ast.value.length)
   
 register AST.get('array'), compileArray
 
 compileMember = (ast, env, code, isTail) ->
-  key = ast.key.val
+  key = ast.key.value
   code
     .append(compileOne(ast.head, env))
     .member(key)

@@ -67,16 +67,16 @@ ifAST = (condE, thenE, elseE) ->
   AST.make 'if', condE, thenE, elseE
 
 define = (id, val) ->
-  AST.make 'define', id.val, val
+  AST.make 'define', id.value, val
 
 param = (name) ->
   AST.make 'param', name
 
 funcDecl = (name, params, body, returns = null) ->
-  AST.make 'procedure', (if name then name.val else name), params, body, returns
+  AST.make 'procedure', (if name then name.value else name), params, body, returns
 
 taskDecl = (name, params, body, returns = null) ->
-  AST.make 'task', (if name then name.val else name), params, body, returns
+  AST.make 'task', (if name then name.value else name), params, body, returns
 
 taskcall = (inner) ->
   if AST.isa(inner, 'funcall')

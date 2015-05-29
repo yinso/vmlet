@@ -1,38 +1,64 @@
+# our goal is to convert the transformation into something that handles things on a per-unit basis.
+# for example - procedure is a complete transformation unit, but it can be embedded further within 
+# the 
 
-# follow hygenic macro design.
-# (a a) => direct translation...
-# syntax-rules ()
-# ((if cond then else) => {if: if, cond: cond, then: then, else: else}
-# (let ((arg argExp)...) exp ...)
-# ((lambda (arg ...) exp ...) argExp ...)
+types = {}
 
-isSymbol = 
-  (exp, env) ->
-    exp instanceof Object and exp.hasOwnProperty('symbol')
-    
-symbolOf = (sym) ->
-  (exp, env) ->
-    isSymbol(exp, env) and exp.symbol == sym
+class TransformResult
+  constructor: (@ast, @bindings, @transformer) ->
+  transform: () ->
+    result = 
+      if @bindings instanceof Array
+        @transformer @ast, @bindings...
+      else
+        @transformer @ast, @bindings
+    #console.log '-- T.transform', @ast, result
+    result
 
-isString =
-  (exp, env) ->
-    exp instanceof Object and exp.hasOwnProperty('string')
+class TransformClause
+  constructor: (@matcher, @transformer) ->
+  match: (ast) ->
+    res = @matcher ast 
+    if res 
+      new TransformResult ast, res, @transformer
+    else
+      false
 
-stringOf = (str) ->
-  (exp, env) ->
-    isString(exp, env) and exp.string == str
+class Transformer 
+  constructor: (@type) ->
+    @inner = []
+  register: (matcher, transformer) ->
+    @inner.push new TransformClause(matcher, transformer)
+  isType: (ast) ->
+    ast instanceof AST
+  match: (ast) ->
+    for clause in @inner 
+      res = clause.match ast
+      if res 
+        return res
+      else
+        continue
+    false
 
-isList = 
-  (exp, env) ->
-    exp instanceof Object and exp.hasOwnproperty('list')
-
-
-
-
-module.exports =
-  isSymbol: isSymbol
-  symbolOf: symbolOf
-  isString: isString
-  stringOf: stringOf
-  isList: isList
+register = (ast, match, transform) ->
   
+  if not types.hasOwnProperty(ast)
+    types[ast] = new Transformer(ast)
+  transformer = types[ast]
+  transformer.register match, transform
+
+transform = (ast) ->
+  if types.hasOwnProperty ast.type()
+    trans = types[ast.type()]
+    res = trans.match ast 
+    if res 
+      return res.transform()
+    else
+      ast
+  else
+    ast
+
+module.exports = 
+  transform: transform 
+  register: register 
+
