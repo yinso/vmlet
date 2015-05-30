@@ -129,15 +129,18 @@ T.register 'assign', ($a) ->
 , ($a) -> $a
 
 T.register 'assign', ($a) -> 
-  if $a.value.type() in 'block'
+  if $a.value.type() == 'block'
     $a.value.items
+  else
+    false
 , ($a, $items...) ->
-  AST.block(for item, i in $items
-    if i < $items.length - 1 
-      T.transform item 
-    else
-      T.transform AST.assign($a.name, item)
-  )
+  items = 
+    for item, i in $items
+      if i < $items.length - 1 
+        T.transform item 
+      else
+        T.transform AST.assign($a.name, item)
+  AST.block items
 
 T.register 'assign', ($a) ->
   if $a.value.type() == 'if'
@@ -174,6 +177,11 @@ T.register 'procedure', ($p) ->
   [ $p.name , $p.params, $p.body , $p.returns ]
 , tr.trace 'proc.trans', ($p, $name, $params, $body, $returns) -> 
   body = T.transform AST.return($body)
+  body = 
+    if body.type() == 'block'
+      body
+    else
+      AST.block [ body ]
   AST.procedure $name, $params, body, $returns
 
 T.register 'task', ($p) -> 

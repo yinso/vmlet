@@ -1,6 +1,7 @@
 # our goal is to convert the transformation into something that handles things on a per-unit basis.
 # for example - procedure is a complete transformation unit, but it can be embedded further within 
 # the 
+tr = require './trace'
 
 types = {}
 
@@ -12,7 +13,6 @@ class TransformResult
         @transformer @ast, @bindings...
       else
         @transformer @ast, @bindings
-    #console.log '-- T.transform', @ast, result
     result
 
 class TransformClause

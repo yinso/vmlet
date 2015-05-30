@@ -20,6 +20,7 @@ dependencies:
   pegjs: =0.8.0
   errorlet: '>=1.0.0'
   lie: =2.8.1
+  escodegen: =1.6.1
 devDependencies:
   testlet: '>= 0.2.0'
   coffee-bean: =0.3.0

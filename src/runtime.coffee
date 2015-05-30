@@ -10,11 +10,13 @@ ANF = require './anf'
 LOCAL = require './local'
 RET = require './return'
 CPS = require './cps'
-compiler = require './anfcompiler'
 baseEnv = require './baseenv'
 Unit = require './unit'
 util = require './util'
 LexicalEnvironment = require './lexical'
+
+esnode = require './esnode'
+escodegen = require 'escodegen'
 
 Promise = require 'bluebird'
 fs = require 'fs'
@@ -84,7 +86,6 @@ class Runtime
   constructor: (@baseEnv = baseEnv) ->
     loglet.log 'Runtime.ctor'
     @parser = parser
-    @compiler = compiler
 #    @defineSync '+', (_rt) -> (a, b) -> a + b
 #    @defineSync '-', (_rt) -> (a, b) -> a - b
 #    @defineSync '*', (_rt) -> (a, b) -> a * b
@@ -141,6 +142,10 @@ class Runtime
     @define key, @makeSync funcMaker
   defineAsync: (key, funcMaker) ->
     @define key, @makeAsync funcMaker
+  compile: (ast) ->
+    node = esnode.expression AST.funcall(AST.procedure(null, [], AST.block([AST.return(ast)])), []).toESNode()
+    #console.log '--to.esnode', JSON.stringify(node, null, 2)
+    escodegen.generate node
   eval: (stmt, cb) ->
     if stmt == ':context'
       return cb null, @context
@@ -160,7 +165,7 @@ class Runtime
       #loglet.log '-------- Runtime.retted =>', ast
       ast = CPS.transform ast
       loglet.log '-------- Runtime.cpsed =>', ast.type()
-      compiled = @compiler.compile ast
+      compiled = @compile ast
       loglet.log '-------- Runtime.compiled =>', compiled
       compiler = vm.runInContext compiled, @context
       loglet.log '-------- Runtime.evaled =>', compiler

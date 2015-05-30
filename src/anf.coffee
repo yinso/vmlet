@@ -80,8 +80,11 @@ register AST.get('bool'), transformScalar
 register AST.get('null'), transformScalar
 register AST.get('string'), transformScalar
 register AST.get('ref'), transformScalar
-register AST.get('procedure'), transformScalar
-register AST.get('task'), transformScalar
+
+transformProc = (ast, env, block) ->
+  assign ast, env, block
+register AST.get('procedure'), transformProc
+register AST.get('task'), transformProc
 
 transformBinary = (ast, env, block) ->
   ##loglet.log '--anf.binary', ast

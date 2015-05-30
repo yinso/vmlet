@@ -222,7 +222,7 @@ AST.register class ASSIGN extends AST
   toString: () ->
     "{ASSIGN #{@name} #{@value}}"
   toESNode: () ->
-    esnode.assign @name, @value 
+    esnode.assign esnode.identifier(@name), @value.toESNode() 
   canReduce: () -> true # this is actually not necessarily true...!!!
 
 AST.register class DEFINE extends AST
@@ -235,7 +235,7 @@ AST.register class DEFINE extends AST
   toString: () ->
     "{DEFINE #{@name} #{@value}}"
   toESNode: () ->
-    esnode.declare 'var', [ @name, @value.toESNode() ]
+    esnode.declare 'var', [ esnode.identifier(@name), @value.toESNode() ]
   canReduce: () -> true # this is actually not necessarily true...!!!
 
 AST.register class LOCAL extends AST
@@ -263,9 +263,9 @@ AST.register class LOCAL extends AST
       "{LOCAL #{@name()}}"
   toESNode: () ->
     if @init 
-      esnode.declare 'var', [ @name(), @value.toESNode() ]
+      esnode.declare 'var', [ esnode.identifier(@name()), @normalized().toESNode() ]
     else
-      esnode.declare 'var', [ @name(), null ]
+      esnode.declare 'var', [ esnode.identifier(@name()), null ]
   canReduce: () -> true # this is actually not necessarily true...!!!
 
 # temp var should really just be a way to coin a particular reference - the reference itself should have 
@@ -283,7 +283,7 @@ AST.register class TEMPVAR extends AST
   toString: () ->
     "{TEMPVAR #{@normalized()} #{@value}}"
   toESNode: () ->
-    esnode.declare 'var', [ @normalized(), @value.toESNode() ]
+    esnode.declare 'var', [ esnode.identifier(@normalized()), @value.toESNode() ]
 
 # PROXYVAL - used to hold the actual value of the 
 
@@ -301,7 +301,7 @@ AST.register class PROXYVAL extends AST
   toString: () ->
     "{PROXYVAL #{@name} #{@value}}"
   toESNode: () ->
-    esnode.declare 'var', [ @name, @value.toESNode() ]
+    esnode.declare 'var', [ esnode.identifier(@name), @value.toESNode() ]
 
 AST.register class PARAM extends AST
   constructor: (@name, @type = null, @default = null) ->
@@ -388,17 +388,6 @@ AST.register class IF extends AST
   toESNode: () ->
     esnode.if @cond.toESNode(), @then.toESNode(), @else.toESNode()
   canReduce: () -> true # this is actually not necessarily true...!!!
-
-# this is meant for transformation rather than input...
-AST.register class WHILE extends AST
-  @type: 'while'
-  constructor: (@cond, @block) ->
-  _equals: (v) ->
-    @cond.equals(v.cond) and @block.equals(v.block)
-  isAsync: () ->
-    @cond.isAsync() or @block.isAsync()
-  toString: () ->
-    "{WHILE #{@cond} #{@block}}"
 
 AST.register class FUNCALL extends AST
   @type: 'funcall'
@@ -524,5 +513,57 @@ AST.register class TRY extends AST
   toESNode: () ->
     escode.try @body.toESNode(), (exp.toESNode() for exp in @catches), @finally?.toESNode() or null
   canReduce: () -> true
+
+###
+
+WHILE, CONTINUE, SWITCH, CASE, and DEFAULT
+
+These are used for tail call transformations.
+
+###
+
+AST.register class WHILE extends AST
+  @type: 'while'
+  constructor: (@cond, @block) ->
+  _equals: (v) ->
+    @cond.equals(v.cond) and @block.equals(v.block)
+  isAsync: () ->
+    @cond.isAsync() or @block.isAsync()
+  toString: () ->
+    "{WHILE #{@cond} #{@block}}"
+  toESNode: () ->
+    escode.while @cond.toESNode(), @block.toESNode()
+
+AST.register class CONTINUE extends AST
+  @type: 'continue'
+  toString: () -> 
+    "{CONTINUE}"
+  toESNode: () ->
+    escode.continue()
+
+AST.register class SWITCH extends AST
+  @type: 'switch'
+  constructor: (@cond, @cases = []) ->
+  toString: () ->
+    "{SWITCH #{@cond} #{@cases}}"
+  toESNode: () ->
+    escode.switch @cond.toESNode(), (c.toESNode() for c in @cases)
+
+AST.register class CASE extends AST
+  @type: 'case'
+  constructor: (@cond, @exp) ->
+  toString: () ->
+    "{CASE #{@cond} #{@exp}}"
+  toESNode: () ->
+    escode.case @cond.toESNode(), @exp.toESNode()
+
+AST.register class DEFAULTCASE extends AST
+  @type: 'defaultCase'
+  constructor: (@exp) ->
+  toString: () ->
+    "{DEFAULT #{@exp}}"
+  toESNode: () ->
+    escode.defaultCase @exp.toESNode()
+
 
 module.exports = AST
