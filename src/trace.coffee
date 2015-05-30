@@ -44,7 +44,7 @@ objToStr = (arg) ->
     return [ indent(2) + 'null' ]
   if arg == undefined 
     return [ indent(2) + 'undefined' ]
-  for str, i in arg.toString().split '\n'
+  for str, i in JSON.stringify(arg, null, 2).split '\n'
     if i == 0 
       indent(2) + str
     else

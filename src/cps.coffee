@@ -4,6 +4,7 @@ errorlet = require 'errorlet'
 
 AST = require './ast'
 util = require './util'
+TR = require './trace'
 
 types = {}
 
@@ -115,7 +116,6 @@ cpsBlock = (anf, contAST, cbAST) ->
   normalize contAST
 
 register AST.get('block'), cpsBlock
-#register AST.get('anf'), cpsBlock
 
 _cpsOne = (item, contAST, cbAST) ->
   #loglet.log '--cps.one', item, contAST, cbAST
@@ -148,8 +148,9 @@ combine = (ast, contAST) ->
   if not contAST
     ast
   else if contAST.type() == 'block'
-    contAST.items.unshift ast
-    contAST
+    AST.block [ ast ].concat(contAST.items)
+    #contAST.items.unshift ast
+    #contAST
   else
     AST.block [ ast, contAST ]
 
@@ -242,7 +243,6 @@ cpsReturn = (ast, contAST, cbAST) ->
 register AST.get('return'), cpsReturn
 
 cpsIf = (ast, contAST, cbAST) ->
-  #loglet.log '--cps.if', ast
   AST.if(ast.cond,
     _cpsOne(ast.then, contAST, cbAST),
     _cpsOne(ast.else, contAST, cbAST)
@@ -263,6 +263,7 @@ register AST.get('member'), cpsScalar
 register AST.get('procedure'), cpsScalar
 register AST.get('proxyval'), cpsScalar
 register AST.get('ref'), cpsScalar
+register AST.get('var'), cpsScalar
 register AST.get('funcall'), cpsScalar
 register AST.get('array'), cpsScalar
 register AST.get('object'), cpsScalar

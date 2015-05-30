@@ -9,7 +9,6 @@ ParamList = require './parameter'
 LexicalEnvironment = require './lexical'
 tr = require './trace'
 Transformer = require './transformer'
-require './ret'
 ANF = require './anf'
 
 _transTypes = {}
@@ -84,12 +83,12 @@ transformDefine = (ast, env) ->
 
 register AST.get('define'), tr.trace 'resolve.define', transformDefine
 
-transformIdentifier = (ast, env) ->
-  #console.log '--transform.identifier', ast.value, env, env.has(ast.value)
+transformIdentifier = tr.trace 'resolver.identifier', (ast, env) ->
+  tr.log 'resolver.identifier', env.has(ast.name), JSON.stringify(env, null, 2)
   if env.has ast.value
     env.get ast.value
   else
-    throw errorlet.create {error: 'ANF.transform:unknown_identifier', id: ast.value}  
+    throw errorlet.create {error: 'RESOLVER.transform:unknown_identifier', id: ast.value}  
   
 register AST.get('symbol'), transformIdentifier
 

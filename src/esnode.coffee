@@ -7,8 +7,11 @@ identifier = (name) ->
     name: name
 
 literal = (val) ->
-  type: 'Literal'
-  value: val
+  if val == undefined
+    undefined_
+  else
+    type: 'Literal'
+    value: val
 
 null_ = () ->
   literal null

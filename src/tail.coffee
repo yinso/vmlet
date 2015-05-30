@@ -18,6 +18,9 @@ AST = require './ast'
 #     that pulls in the mutual recursion.
 # 9 - this can also work for whole module recursion - just consider them as a humonguous case of functions...
 
+# maybe I need to get rid of my reliance on REF now that I have removed checking against environment everywhere else but 
+# resolver...
+
 tre = () ->
   
 

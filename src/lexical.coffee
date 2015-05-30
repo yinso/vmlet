@@ -52,6 +52,7 @@ class LexicalEnvironment extends Environment
         new GensymTable()
   defineParam: (param) ->
     @define param.name, param.ref()
+    param
   defineLocal: (name, val) ->
     ref = @symMap.ref(name, val)
     @define name, ref

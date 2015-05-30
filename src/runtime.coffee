@@ -6,44 +6,19 @@ Environment = require './environment'
 parser = require './parser'
 AST = require './ast'
 RESOLVER = require './resolver'
-ANF = require './anf'
-LOCAL = require './local'
-RET = require './return'
+require './ret'
 CPS = require './cps'
 baseEnv = require './baseenv'
 Unit = require './unit'
 util = require './util'
 LexicalEnvironment = require './lexical'
+TR = require './trace'
 
 esnode = require './esnode'
 escodegen = require 'escodegen'
 
 Promise = require 'bluebird'
 fs = require 'fs'
-
-###
-class CompileTimeEnvironment extends Environment
-  constructor: (@inner) ->
-  has: (key) ->
-    @inner.has key
-  get: (key) ->
-    # we want it to return something that would be of substitute?
-    # this doesn't work - we need something that says it's available as a SUPER_REF. i.e. not a LOCAL_REF
-    # that are 
-    AST.make('proxyval', key, 
-      @inner.get(key), 
-      (ast) ->
-        "_rt.get(#{JSON.stringify(ast.name)})"
-    )
-###
-# a true way to deal with it is not to worry about full-case tail call optimization.
-# 
-#fs.readFile 'package.json', 'utf8', _sn.callback (err, res) ->
-#  if err
-#    _sn.callback(cb, err)
-#  else
-#    ...
-# the question is - how does this work with 
 
 class Session
   constructor: (@cb) -> # this is the final callback - it might be passed in along the way...
@@ -81,11 +56,18 @@ class Session
 # let's do most of the work in transformations!
 # i.e. the compiler should just be something that automates the process...
 
+# compiled time environment and runtime environment are now definition going to be different...
+# in order to do so we should retain as much information as possible about the object that is being created.
+# when it's being referenced - i.e. keep the high level defintiion of the object 
+# something like... 
+# 
+# in this version we don't really know the object itself... hmmm... 
   
 class Runtime
   constructor: (@baseEnv = baseEnv) ->
     loglet.log 'Runtime.ctor'
     @parser = parser
+    @AST = AST
 #    @defineSync '+', (_rt) -> (a, b) -> a + b
 #    @defineSync '-', (_rt) -> (a, b) -> a - b
 #    @defineSync '*', (_rt) -> (a, b) -> a * b
@@ -99,6 +81,7 @@ class Runtime
 #    @defineSync 'isNumber', (_rt) ->
 #      (a) -> 
 #        typeof(a) == 'number' or a instanceof Number
+    ###
     @define 'console', 
       log: @makeSync (_rt) -> 
         (args...) ->
@@ -120,6 +103,7 @@ class Runtime
         (args...) ->
           console.error args...
           Unit.unit
+    ###
     # now the biggest challenge starts!
     @define 'fs',
       readFile: @makeAsync (_rt) ->
@@ -130,6 +114,12 @@ class Runtime
   unit: Unit.unit
   define: (key, val) ->
     baseEnv.define key, val
+  makeProc: (func, def) -> 
+    Object.defineProperty func, '__vmlet',
+      value: 
+        sync: true
+        def: def 
+    func
   makeSync: (funcMaker) ->
     func = funcMaker @
     func.__vmlet = {sync: true}
@@ -143,8 +133,8 @@ class Runtime
   defineAsync: (key, funcMaker) ->
     @define key, @makeAsync funcMaker
   compile: (ast) ->
-    node = esnode.expression AST.funcall(AST.procedure(null, [], AST.block([AST.return(ast)])), []).toESNode()
-    #console.log '--to.esnode', JSON.stringify(node, null, 2)
+    node = esnode.expression esnode.funcall(esnode.function(null, [], esnode.block([esnode.return(ast.toESNode())])), [])
+    TR.log '--to.esnode', node
     escodegen.generate node
   eval: (stmt, cb) ->
     if stmt == ':context'
@@ -155,16 +145,12 @@ class Runtime
       loglet.log '-------- Runtime.eval =>', stmt
       ast = @parser.parse stmt 
       loglet.log '-------- Runtime.parsed =>', ast
-      ast = RESOLVER.transform ast, new LexicalEnvironment()
+      ast = RESOLVER.transform ast, new LexicalEnvironment(@baseEnv)
       loglet.log '-------- Runtime.transformed =>', ast
       #ast = ANF.transform ast
       #loglet.log '-------- Runtime.anffed =>', ast
-      #ast = LOCAL.transform ast
-      #loglet.log '-------- Runtime.localed =>', ast
-      #ast = RET.transform ast 
-      #loglet.log '-------- Runtime.retted =>', ast
       ast = CPS.transform ast
-      loglet.log '-------- Runtime.cpsed =>', ast.type()
+      loglet.log '-------- Runtime.cpsed =>', ast
       compiled = @compile ast
       loglet.log '-------- Runtime.compiled =>', compiled
       compiler = vm.runInContext compiled, @context
