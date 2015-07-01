@@ -134,7 +134,7 @@ class Runtime
     @define key, @makeAsync funcMaker
   compile: (ast) ->
     node = esnode.expression esnode.funcall(esnode.function(null, [], esnode.block([esnode.return(ast.toESNode())])), [])
-    TR.log '--to.esnode', node
+    #TR.log '--to.esnode', node
     escodegen.generate node
   eval: (stmt, cb) ->
     if stmt == ':context'

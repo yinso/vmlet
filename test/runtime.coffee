@@ -1,4 +1,4 @@
-VM = require '../src/vm'
+VM = require '../src/runtime'
 loglet = require 'loglet'
 assert = require 'assert'
 errorlet = require 'errorlet'
