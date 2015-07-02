@@ -36,8 +36,6 @@ class Environment
       @prev.set key, val
     else
       throw {error: 'invalid_identifier', name: key}
-  defineRef: (key) ->
-    @define key, AST.make('ref', key)
   newEnvFromParams: (params) ->
     refs = 
       for param in params

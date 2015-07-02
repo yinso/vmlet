@@ -208,27 +208,6 @@ AST.register class BLOCK extends AST
   selfESNode: () ->
     @baseSelfESNode esnode.array(item.selfESNode() for item in @items)
 
-#AST.register class TOPLEVEL extends BLOCK
-#  @type: 'toplevel'
-
-AST.register class REF extends AST
-  @type: 'ref'
-  constructor: (@name, @value, @suffix = 0) ->
-  normalized: () ->
-    @name + if @suffix > 0 then "$#{@suffix}" else ''
-  isAsync: () ->
-    @value.isAsync()
-  toString: () ->
-    "{REF #{@normalized()}}"
-  local: (init = true) ->
-    AST.local @, init
-  define: () ->
-    AST.define @name, @value
-  toESNode: () ->
-    esnode.identifier @normalized()
-  selfESNode: () ->
-    @baseSelfESNode esnode.literal(@name), @value.selfESNode(), esnode.literal(@suffix)
-
 AST.register class ASSIGN extends AST
   @type: 'assign'
   constructor: (@name, @value) ->
@@ -259,38 +238,31 @@ AST.register class DEFINE extends AST
   selfESNode: () ->
     @baseSelfESNode esnode.literal(@name), @value.selfESNode()
 
-AST.register class LOCAL extends AST
+AST.register class LOCAL extends AST 
   @type: 'local'
-  constructor: (@value, @init = true) ->
-    if not (@value instanceof REF)
-      throw new Error("LOCAL:not_a_REF #{@value}")
+  constructor: (@name, @value) ->
+  _equals: (v) ->
+    @name == v.name and @value.equals(v.value)
   isAsync: () ->
-    @value.isAsync()
-  clone: (val, init = true) ->
-    ref = AST.ref @value.name, val, @value.suffix
-    ref.local(init)
-  noInit: () -> 
-    AST.var @name()
-    #@clone @normalized(), false
-  name: () ->
-    @value.normalized()
-  normalized: () ->
-    @value.value
-  assign: (value = @normalized()) ->
-    AST.assign @name(), value
+    @value?.isAsync() or false
   toString: () ->
-    if @init
-      "{LOCAL #{@name()} = #{@normalized()}}"
-    else
-      "{LOCAL #{@name()}}"
+    "{LOCAL #{@name} #{@value}}"
   toESNode: () ->
-    if @init 
-      esnode.declare 'var', [ esnode.identifier(@name()), @normalized().toESNode() ]
+    if not @value
+      esnode.declare 'var', [ esnode.identifier(@name) ]
     else
-      esnode.declare 'var', [ esnode.identifier(@name()), null ]
+      esnode.declare 'var', [ esnode.identifier(@name), @value.toESNode() ]
+  noInit: () ->
+    AST.local @name
+  assign: (value = @value) ->
+    AST.assign @name, value
   canReduce: () -> true # this is actually not necessarily true...!!!
   selfESNode: () ->
-    @baseSelfESNode @value.selfESNode(), esnode.literal(@init)
+    if @value
+      @baseSelfESNode esnode.literal(@name), @value.selfESNode()
+    else
+      @baseSelfESNode esnode.literal(@name)
+
 
 # temp var should really just be a way to coin a particular reference - the reference itself should have 
 # automatic names...
@@ -352,8 +324,6 @@ AST.register class PARAM extends AST
       false
   toString: () ->
     "{PARAM #{@name} #{@type} #{@default}}"
-  ref: () ->
-    AST.ref @name, @
   toESNode: () ->
     esnode.identifier @name
   selfESNode: () ->
@@ -394,7 +364,7 @@ AST.register class PROCEDURE extends AST
   selfESNode: () ->
     params = 
       esnode.array(param.selfESNode() for param in @params )
-    name = if @name then esnode.identifier(@name) else esnode.null_()
+    name = if @name then esnode.literal(@name) else esnode.null_()
     @baseSelfESNode name, params, @body.selfESNode(), @returns?.selfESNode() or esnode.literal(@returns)
 
 AST.register class TASK extends AST

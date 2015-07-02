@@ -30,11 +30,9 @@ class GensymTable
   symid: (prefix = '__') ->
     @inner[prefix] = @inner[prefix] or 0
     @inner[prefix]++
-  ref: (name, val) ->
-    AST.ref(name, val, @symid(name))
-  temp: (val) ->
+  temp: () ->
     name = "_$" + numToBase62(@tempName++) 
-    AST.ref(name, val, @symid(name))
+    AST.symbol name 
 
 class LexicalEnvironment extends Environment
   @defaultPrefix = '___'
@@ -51,23 +49,19 @@ class LexicalEnvironment extends Environment
       else
         new GensymTable()
   defineParam: (param) ->
-    @define param.name, param.ref()
+    @define param.name, param
     param
   defineLocal: (name, val) ->
-    ref = @symMap.ref(name, val)
-    @define name, ref
-    ref
+    sym = @symMap.gensym name 
+    @define name, AST.symbol(sym)
+    sym 
   mapParam: (param) ->
     sym = @defineRef param.name
     AST.make 'param', sym, param.type, param.default
   defineTemp: (exp) ->
-    ref = @symMap.temp exp
-    @define ref.name, exp
-    ref
-  defineRef: (name) ->
-    ref = AST.ref name
-    @define name, ref
-    ref
+    sym = @symMap.temp()
+    @define sym.value, exp 
+    sym 
   gensym: (prefix = LexicalEnvironment.defaultPrefix) ->
     @symMap.gensym prefix
   assign: (val, sym = LexicalEnvironment.defaultPrefix) ->

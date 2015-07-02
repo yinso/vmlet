@@ -30,7 +30,7 @@ T.register 'return', ($r) ->
 
 T.register 'return', ($r) ->
   if $r.value.type() == 'local'
-    [ $r.value.normalized() ]
+    [ $r.value.value ]
   else
     false
 , ($r, $inner) -> 
@@ -75,12 +75,12 @@ T.register 'return', ($r) ->
   T.transform $finally
 
 T.register 'local', ($l) -> 
-  val = $l.normalized()
+  val = $l.value
   val.type() in atomicTypes
 , ($l) -> $l
 
 T.register 'local', ($l) -> 
-  val = $l.normalized()
+  val = $l.value
   console.log 'local.if', val.type() == 'if', val
   if val.type() == 'if'
     [ val.cond, val.then, val.else ]
@@ -93,7 +93,7 @@ T.register 'local', ($l) ->
   ]
 
 T.register 'local', ($l) -> 
-  val = $l.normalized()
+  val = $l.value
   if val.type() == 'block'
     val.items
   else
@@ -175,7 +175,7 @@ T.register 'assign', ($a) ->
 
 T.register 'procedure', ($p) -> 
   [ $p.name , $p.params, $p.body , $p.returns ]
-, tr.trace 'proc.trans', ($p, $name, $params, $body, $returns) -> 
+, ($p, $name, $params, $body, $returns) -> 
   body = T.transform AST.return($body)
   body = 
     if body.type() == 'block'

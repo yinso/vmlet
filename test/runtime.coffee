@@ -7,25 +7,28 @@ describe 'vm test', ->
   
   vm = new VM()
   
+  
   canEval = (stmt, expected) ->
+    
     it "can eval #{stmt}", (done) ->
       
       vm.eval stmt, (err, actual) ->
+        
         errorHelper = (err) ->
           loglet.log '------------- VM.canEval.ERROR', stmt
-          loglet.log expected
-          loglet.log actual
+          loglet.log expected, actual
           loglet.error err
-          done err
         
         if err 
           errorHelper err
+          done err
         else
           try 
             assert.deepEqual actual, expected
             done null
           catch e
             errorHelper e
+            done err
   
   canEvalError = (stmt) ->
     it "can eval #{stmt}", (done) ->
@@ -51,7 +54,7 @@ describe 'vm test', ->
   s1 = 
     """
     (func count(a) {
-      func helper(acc) {
+      define func helper(acc) {
         if (acc > 0)
           helper(acc - 1)
         else
@@ -73,6 +76,7 @@ describe 'vm test', ->
     )(10)
     """
   canEval fib, 55
+  ###
   fibtco = 
     """
     (func fib(n) {
@@ -85,4 +89,4 @@ describe 'vm test', ->
     })(80)
     """
   canEval fibtco, 23416728348467685
-  
+  ###

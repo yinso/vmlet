@@ -3,7 +3,6 @@ errorlet = require 'errorlet'
 AST = require './ast'
 baseEnv = require './baseenv'
 Environment = require './environment'
-ParamList = require './parameter'
 LexicalEnvironment = require './lexical'
 tr = require './trace'
 
@@ -25,9 +24,10 @@ override = (ast, transformer) ->
   _transTypes[ast.type] = transformer
 
 assign = (ast, env, block, sym = LexicalEnvironment.defaultPrefix) ->
-  ref = env.defineTemp ast
-  block.push ref.local()
-  ref
+  sym = env.defineTemp ast 
+  console.log 'anf.assign', sym
+  block.push AST.local sym.value, ast
+  sym
   #varName = env.assign ast, sym
   #block.push AST.tempvar(varName, ast)
   #AST.symbol varName
@@ -49,7 +49,7 @@ normalizeBlock = (ast) ->
     else
       items.push switch item.type()
         when 'local'
-          item.normalized()
+          item.value
         when 'define'
           item.value
         else
@@ -79,7 +79,6 @@ register AST.get('number'), transformScalar
 register AST.get('bool'), transformScalar
 register AST.get('null'), transformScalar
 register AST.get('string'), transformScalar
-register AST.get('ref'), transformScalar
 
 transformProc = (ast, env, block) ->
   assign ast, env, block
@@ -185,20 +184,8 @@ register AST.get('param'), transformParam
 
 makeProc = (type) ->
   (ast, env, block) ->
-    #Transformer.transform ast # this will cause recursion overflow... how do I overcome this issue? 
-    
     newEnv = new LexicalEnvironment env
-    #name = 
-    #  if ast.name
-    #    newEnv.defineRef ast.name
-    #  else
-    #    undefined
-    #params = 
-    #  for param in ast.params
-    #    newEnv.mapParam param
-    #body = Transformer.transform ast.body, newEnv
     body = _transformInner ast.body, newEnv
-    #console.log '--anf.makeProc', ast.body, body
     ast = AST.make type, ast.name or undefined, ast.params, body
     assign ast, env, block
 
@@ -214,20 +201,17 @@ transformThrow = (ast, env, block) ->
 register AST.get('throw'), transformThrow
 
 transformCatch = (ast, env, block) ->
-  #loglet.log '--anf.transformCatch', ast
   newEnv = new LexicalEnvironment env
   ref = newEnv.defineParam ast.param
   body = transform ast.body, newEnv
   AST.catch ast.param, body
 
 transformFinally = (ast, env, block) ->
-  #loglet.log '--anf.transformFinally', ast
   newEnv = new LexicalEnvironment env
   body = _transform ast.body, newEnv
   AST.finally body
 
 transformTry = (ast, env, block) ->
-  #loglet.log '--anf.transformTry', ast
   newEnv = new LexicalEnvironment env
   body = transform ast.body, newEnv
   catches = 
@@ -238,7 +222,6 @@ transformTry = (ast, env, block) ->
       transformFinally ast.finally, env, block
     else
       null
-  #loglet.log '--anf.transformTry', body, catches, fin
   block.push AST.try(body, catches, fin)
 
 register AST.get('try'), transformTry

@@ -189,8 +189,8 @@ cpsLocal = (ast, contAST, cbAST) ->
   if ast.isAsync()
     _cpsOne ast.value, makeCallback(contAST, cbAST, AST.param(ast.name)), cbAST
   else
-    head = AST.local _cpsOne(ast.value, null, null), ast.init
-    combine head, contAST
+    #head = AST.local ast.name, _cpsOne(ast.value, null, null)
+    combine ast, contAST
 
 register AST.get('local'), cpsLocal
 
@@ -262,7 +262,6 @@ register AST.get('binary'), cpsScalar
 register AST.get('member'), cpsScalar
 register AST.get('procedure'), cpsScalar
 register AST.get('proxyval'), cpsScalar
-register AST.get('ref'), cpsScalar
 register AST.get('var'), cpsScalar
 register AST.get('funcall'), cpsScalar
 register AST.get('array'), cpsScalar
@@ -278,12 +277,12 @@ makeErrorHandler = (catchExp, finallyExp, cbAST, name) ->
   #loglet.log '--cps.makeErrorHandler', catchExp.body, finallyExp.body, cbAST
   body = concat finallyExp.body, catchExp.body
   body = _cpsOne body, cbAST, cbAST
-  AST.local AST.ref name, AST.procedure(undefined, [ catchExp.param ], body)
+  AST.local name, AST.procedure(undefined, [ catchExp.param ], body)
 
 cpsTry = (ast, contAST, cbAST) ->
   name = '__handleError$1'
   errorAST = makeErrorHandler ast.catches[0], ast.finally, cbAST, name
-  cbAST = AST.ref name
+  cbAST = AST.symbol name
   bodyAST = _cpsOne ast.body, contAST, cbAST
   combine errorAST, bodyAST
 

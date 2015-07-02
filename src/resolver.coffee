@@ -5,7 +5,6 @@ errorlet = require 'errorlet'
 AST = require './ast'
 baseEnv = require './baseenv'
 Environment = require './environment'
-ParamList = require './parameter'
 LexicalEnvironment = require './lexical'
 tr = require './trace'
 Transformer = require './transformer'
@@ -25,12 +24,10 @@ get = (ast) ->
   else
     throw errorlet.create {error: 'resolver_unsupported_ast_type', type: ast.constructor.type}
 
-transform = tr.trace 'resolver.transform', (ast, env) ->
+transform = (ast, env) ->
   resolved = _transform ast, env
   anf = ANF.transform resolved
   Transformer.transform AST.return(anf)
-
-
 
 _transform = (ast, env) ->
   resolver = get(ast)
@@ -76,15 +73,15 @@ transformDefine = (ast, env) ->
     env.define ast.name, res
     AST.define ast.name, res
   else
-    ref = env.defineLocal ast.name, res
-    local = ref.local()
-    tr.log '--transform.define.local', ast.name, res, ref, local
+    name = env.defineLocal ast.name, res
+    local = AST.local name, res
+    tr.log '--transform.define.local', ast.name, res, name, local
     local
 
-register AST.get('define'), tr.trace 'resolve.define', transformDefine
+register AST.get('define'), transformDefine
 
-transformIdentifier = tr.trace 'resolver.identifier', (ast, env) ->
-  tr.log 'resolver.identifier', env.has(ast.name), JSON.stringify(env, null, 2)
+transformIdentifier = (ast, env) ->
+  #tr.log 'resolver.identifier', env.has(ast.name), JSON.stringify(env, null, 2)
   if env.has ast.value
     env.get ast.value
   else
@@ -142,18 +139,15 @@ register AST.get('param'), transformParam
 makeProc = (type) ->
   (ast, env) ->
     newEnv = new LexicalEnvironment env
-    name = 
-      if ast.name
-        newEnv.defineRef ast.name
-      else
-        undefined
+    if ast.name
+      newEnv.define ast.name, AST.symbol(ast.name)
     params = 
       for param in ast.params
         newEnv.defineParam param
-    #console.log '-- make.proc', type, newEnv
+    decl = AST.make type, ast.name, params, null 
     body = _transform ast.body, newEnv
-    res = AST.make type, name?.name, params, ANF.transform(body)
-    Transformer.transform res
+    decl.body = body
+    Transformer.transform decl
 
 register AST.get('procedure'), makeProc('procedure')
 register AST.get('task'), makeProc('task')

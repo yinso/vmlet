@@ -147,8 +147,6 @@ class Runtime
       loglet.log '-------- Runtime.parsed =>', ast
       ast = RESOLVER.transform ast, new LexicalEnvironment(@baseEnv)
       loglet.log '-------- Runtime.transformed =>', ast
-      #ast = ANF.transform ast
-      #loglet.log '-------- Runtime.anffed =>', ast
       ast = CPS.transform ast
       loglet.log '-------- Runtime.cpsed =>', ast
       compiled = @compile ast
