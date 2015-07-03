@@ -2,37 +2,43 @@
 
 Runtime = require '../src/'
 loglet = require 'loglet'
-repl = require 'repl'
 yargs = require('yargs')
   .alias('d', 'debug')
+
 baseEnv = require '../src/baseenv'
-runtime = new Runtime(baseEnv)
+vm = new Runtime(baseEnv)
 
 if yargs.argv.debug
   loglet.setKeys yargs.argv.debug
 
-cmdString = (cmd) ->
-  if cmd.length > 2 and cmd[0] == '(' and cmd[cmd.length - 1] == ')'
-    cmd.substring(1, cmd.length - 2)
-  else
-    cmd
+repl = require '../src/repl'
 
-myEval = (cmd, context, filename, cb) ->
-  #loglet.log 'myEval.call', cmd
-  stmt = cmdString(cmd)
-  if stmt == ''
-    cb null
-  else
-    runtime.eval cmdString(cmd), (err, res) ->
-      #loglet.log 'myEval.result', err, res
-      if err
-        loglet.error err
-        cb null
+# we should have something that shows the multiline expressions...
+multiLineExpRE = /^\s*(begin|\{|\(|def|func|table|tuple|relation|if|create|type|\[|select|insert|update|delete|create|alter|drop|try)/
+
+emptyLineRE = /^\s*$/
+
+repl.start
+  prompt: 'V> '
+  onParse: (repl, cmd) ->
+    try
+      if cmd.match emptyLineRE # empty line, return value to supress error
+        {state: 'ok', parsed: undefined}
       else
-        cb null, res
-
-repl.start 
-  prompt: 'q> '
-  input: process.stdin
-  output: process.stdout
-  eval: myEval
+        {state: 'ok', parsed: vm.parse(cmd)}
+    catch e
+      if cmd.match multiLineExpRE # multi-line; not completed yet
+        {state: 'more', parsed: cmd}
+      else
+        {state: 'error', parsed: e}
+  historyFile: '.vmlet-history.log'
+  onEval: (repl, cmd, exp, cb) ->
+    if not exp
+      cb null, exp
+    else
+      vm.eval cmd, cb
+  onResult: (repl, res) ->
+    if res != undefined
+      repl.writeLine res
+  onTabCompletion: (repl, text) ->
+    []

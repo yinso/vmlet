@@ -43,6 +43,8 @@ class Environment
       loglet.error @
       throw {error: 'Environment:invalid_identifier', name: key}
   define: (key, val) ->
+    # what we need to do here is to make sure that we are creating the reference while we are setting.
+    # with every set we should also verify whether or not a previous 
     if @inner.has(key)
       throw {error: 'duplicate_definition', name: key}
     else

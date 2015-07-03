@@ -133,11 +133,13 @@ describe 'parser test', ->
       )
     )
   canParse 'throw 1 + 2',
-    AST.make 'throw',
-      AST.make 'binary',
-        '+',
-        AST.make('number', 1),
-        AST.make('number', 2)
+    AST.throw(
+      AST.binary(
+        '+'
+        AST.number(1)
+        AST.number(2)
+      )
+    )
   canParse 'try { throw 1 } catch (e) { 2 } finally { 3 }',
     AST.try(
       AST.throw(AST.number(1))

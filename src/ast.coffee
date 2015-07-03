@@ -284,6 +284,19 @@ AST.register class LOCAL extends AST
     else
       @baseSelfESNode @name.selfESNode()
 
+# REF is used to determine whether or not we are referring to exactly the same thing.
+AST.register class REF extends AST 
+  @type: 'ref'
+  constructor: (@name, @value) ->
+    
+  _equals: (v) -> @ == v
+  isAsync: () -> false
+  local: () ->
+    AST.local @name, @value
+  toESNode: () ->
+    @name.toESNode()
+  selfESNode: () ->
+    @baseSelfESNode @name.toESNode(), @value.toESNode()
 
 # temp var should really just be a way to coin a particular reference - the reference itself should have 
 # automatic names...

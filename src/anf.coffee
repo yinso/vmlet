@@ -1,7 +1,7 @@
 #loglet = require '#loglet'
 errorlet = require 'errorlet'
 AST = require './ast'
-LexicalEnvironment = require './lexical'
+Environment = require './lexical'
 tr = require './trace'
 
 _transTypes = {}
@@ -21,14 +21,10 @@ get = (ast) ->
 override = (ast, transformer) ->
   _transTypes[ast.type] = transformer
 
-assign = (ast, env, block, sym = LexicalEnvironment.defaultPrefix) ->
+assign = (ast, env, block) ->
   sym = env.defineTemp ast 
-  console.log 'anf.assign', sym
   block.push AST.local sym, ast
   sym
-  #varName = env.assign ast, sym
-  #block.push AST.tempvar(varName, ast)
-  #AST.symbol varName
 
 normalize = (ast) ->
   switch ast.type()
@@ -100,7 +96,7 @@ transformIf = (ast, env, block) ->
 register AST.get('if'), transformIf
 
 transformBlock = (ast, env, block) ->
-  newEnv = new LexicalEnvironment env
+  newEnv = new Environment env
   for i in [0...ast.items.length - 1]
     _transform ast.items[i], newEnv, block
   res = _transform ast.items[ast.items.length - 1], newEnv, block
@@ -183,7 +179,7 @@ register AST.get('param'), transformParam
 
 makeProc = (type) ->
   (ast, env, block) ->
-    newEnv = new LexicalEnvironment env
+    newEnv = new Environment env
     body = _transformInner ast.body, newEnv
     ast = AST.make type, ast.name or undefined, ast.params, body
     assign ast, env, block
@@ -200,18 +196,18 @@ transformThrow = (ast, env, block) ->
 register AST.get('throw'), transformThrow
 
 transformCatch = (ast, env, block) ->
-  newEnv = new LexicalEnvironment env
+  newEnv = new Environment env
   ref = newEnv.defineParam ast.param
   body = transform ast.body, newEnv
   AST.catch ast.param, body
 
 transformFinally = (ast, env, block) ->
-  newEnv = new LexicalEnvironment env
+  newEnv = new Environment env
   body = transform ast.body, newEnv
   AST.finally body
 
 transformTry = (ast, env, block) ->
-  newEnv = new LexicalEnvironment env
+  newEnv = new Environment env
   body = transform ast.body, newEnv
   catches = 
     for c in ast.catches

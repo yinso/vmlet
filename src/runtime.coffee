@@ -135,6 +135,8 @@ class Runtime
     node = esnode.expression esnode.funcall(esnode.function(null, [], esnode.block([esnode.return(ast.toESNode())])), [])
     #TR.log '--to.esnode', node
     escodegen.generate node
+  parse: (stmt) ->
+    @parser.parse stmt
   eval: (stmt, cb) ->
     if stmt == ':context'
       return cb null, @context
@@ -142,7 +144,7 @@ class Runtime
       return cb null, @baseEnv
     try 
       loglet.log '-------- Runtime.eval =>', stmt
-      ast = @parser.parse stmt 
+      ast = @parse stmt 
       loglet.log '-------- Runtime.parsed =>', ast
       ast = RESOLVER.transform ast, new LexicalEnvironment(@baseEnv)
       loglet.log '-------- Runtime.transformed =>', ast

@@ -3,8 +3,7 @@ loglet = require 'loglet'
 fs = require 'fs'
 AST = require './ast'
 
-# are these specifically Environment's job? I would say they are not!.
-# what we are really trying to do now isn't to have functions that are kept track via 
+# by default there are no modules to be loaded for 
 
 class BaseEnv extends Environment
   makeSync: (funcMaker) ->
