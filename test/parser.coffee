@@ -82,7 +82,7 @@ describe 'parser test', ->
   canParse "{ 1 }", AST.make 'number', 1
   canParse "{abc: 1}", AST.make 'object', [ ['abc', AST.make('number', 1)] ]
   canParse "[1 2 3 ]", AST.make 'array', [ AST.make('number', 1), AST.make('number', 2), AST.make('number', 3) ]
-  canParse "define x = 1", AST.make('define', 'x', AST.make('number', 1))
+  canParse "define x = 1", AST.make('define', AST.symbol('x'), AST.make('number', 1))
   canParse "[1 2 3][1]", 
     AST.make 'member',
       AST.make('array',
@@ -107,29 +107,31 @@ describe 'parser test', ->
       ), 
       [ AST.make('number', 2) ]
   canParse "function add(a, b) a + b", 
-    AST.make 'procedure',
-      'add',
+    AST.procedure(
+      AST.symbol('add')
       [
-        AST.make('param', 'a')
-        AST.make('param', 'b') 
-      ],
-      AST.make('binary',
-        '+',
-        AST.make('symbol', 'a'),
-        AST.make('symbol', 'b')
+        AST.param(AST.symbol('a'))
+        AST.param(AST.symbol('b')) 
+      ]
+      AST.binary(
+        '+'
+        AST.symbol('a')
+        AST.symbol('b')
       )
+    )
   canParse "func (a, b) { a + b }", 
-    AST.make 'procedure',
-      null,
+    AST.procedure(
+      null
       [
-        AST.make('param', 'a')
-        AST.make('param', 'b') 
+        AST.param(AST.symbol('a'))
+        AST.param(AST.symbol('b'))
       ],
-      AST.make('binary',
+      AST.binary(
         '+',
-        AST.make('symbol', 'a'),
-        AST.make('symbol', 'b')
+        AST.symbol('a')
+        AST.symbol('b')
       )
+    )
   canParse 'throw 1 + 2',
     AST.make 'throw',
       AST.make 'binary',
@@ -137,17 +139,15 @@ describe 'parser test', ->
         AST.make('number', 1),
         AST.make('number', 2)
   canParse 'try { throw 1 } catch (e) { 2 } finally { 3 }',
-    AST.make 'try',
-      AST.make('throw',
-        AST.make('number', 1)
-      ),
+    AST.try(
+      AST.throw(AST.number(1))
       [
-        AST.make('catch',
-          AST.make('param', 'e'),
-          AST.make('number', 2)
+        AST.catch(
+          AST.param(AST.symbol('e'))
+          AST.number(2)
         )
-      ],
-      AST.make('finally', AST.make('number', 3))
-  
+      ]
+      AST.finally(AST.number(3))
+    )
   
   

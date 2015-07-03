@@ -104,7 +104,7 @@ cps = (anf, contAST = AST.symbol('_done'), cbAST = contAST) ->
   # 
   # when compile the return function -> 
   ast = AST.task(undefined,
-    [ AST.param('_rt')]
+    [ AST.param(AST.symbol('_rt'))]
     , anf
   )
   _cpsOne ast, contAST, cbAST
@@ -132,14 +132,42 @@ cpsTaskcall = (ast, contAST, cbAST) ->
 
 register AST.get('taskcall'), cpsTaskcall
 
-cpsTask = (ast, contAST, cbAST) ->
-  # the idea of cpsing task is that we want to cps the body.
-  cbAST = AST.symbol('_done')
+cpsTask = (ast, contAST) ->
+  cbAST = AST.param(AST.symbol('_done'))
   body = normalize ast.body
   params = [].concat(ast.params).concat(cbAST)
-  AST.procedure(ast.name,
+  errParam = AST.param(AST.symbol('e'))
+  console.log '--cpTask', body
+  body = 
+    if body.items[0].type() == 'try'
+        _cpsOne(body, cbAST, cbAST.name)
+    else
+      AST.try(
+        _cpsOne(body, cbAST, cbAST.name), 
+        [ 
+          AST.catch(
+            errParam, 
+            AST.block(
+              [
+                AST.return(AST.funcall(
+                  cbAST.name, 
+                  [ 
+                    errParam.name
+                  ]))
+              ]
+            )
+          )
+        ], 
+        null
+      )
+  AST.procedure(
+    ast.name,
     params,
-    _cpsOne(body, cbAST, cbAST)
+    AST.block(
+      [
+        body
+      ]
+    )
   )
   
 register AST.get('task'), cpsTask
@@ -267,24 +295,71 @@ register AST.get('funcall'), cpsScalar
 register AST.get('array'), cpsScalar
 register AST.get('object'), cpsScalar
 
-# this is not the way it should have worked... what the heck...!
 cpsThrow = (ast, contAST, cbAST) ->
   AST.return AST.funcall(cbAST, [ ast.value ])
 
 register AST.get('throw'), cpsThrow
 
-makeErrorHandler = (catchExp, finallyExp, cbAST, name) ->
-  #loglet.log '--cps.makeErrorHandler', catchExp.body, finallyExp.body, cbAST
-  body = concat finallyExp.body, catchExp.body
-  body = _cpsOne body, cbAST, cbAST
-  AST.local name, AST.procedure(undefined, [ catchExp.param ], body)
+_makeErrorHandler = (catchExp, finallyExp, cbAST, name) ->
+  console.log '--cps.makeErrorHandler', catchExp?.body, finallyExp?.body, cbAST
+  catchBody = _cpsOne catchExp.body, cbAST, cbAST
+  resParam = AST.param(AST.symbol('res'))
+  okReturnExp = AST.return(AST.funcall(cbAST, [ catchExp.param.name , resParam.name ]))
+  errorBody = 
+    if finallyExp 
+      AST.try(
+        _cpsOne(finallyExp.body, catchBody, catchBody)
+        [ 
+          AST.catch(
+            catchExp.param,
+            AST.block([
+              okReturnExp 
+            ])
+          )
+        ]
+      )
+    else
+      catchBody 
+  body = 
+    AST.block([
+      AST.if(
+        catchExp.param.name
+        errorBody
+        okReturnExp
+      )
+    ])
+  AST.local name, AST.procedure(undefined, [ catchExp.param , resParam ], body)
 
 cpsTry = (ast, contAST, cbAST) ->
-  name = '__handleError$1'
-  errorAST = makeErrorHandler ast.catches[0], ast.finally, cbAST, name
-  cbAST = AST.symbol name
+  name = AST.symbol('__handleError', 1)
+  console.log '--cpsTry', ast.catches[0], ast.finally
+  catchExp = 
+    if ast.catches.length > 0
+      ast.catches[0]
+    else
+      errParam = AST.param(AST.symbol('e'))
+      AST.catch(
+        errParam
+        AST.block([
+          AST.throw(errParam.name)
+        ])
+      )
+  errorAST = _makeErrorHandler catchExp, ast.finally, cbAST, name
+  cbAST = name
   bodyAST = _cpsOne ast.body, contAST, cbAST
-  combine errorAST, bodyAST
+  tryBody = combine errorAST, bodyAST 
+  errorParam = AST.param(AST.symbol('e'))
+  AST.try(
+    tryBody
+    [ 
+      AST.catch(
+        errorParam
+        AST.block([
+          AST.return(AST.funcall(errorAST.name, [ errorParam.name ]))
+        ])
+      )
+    ]
+  )
 
 register AST.get('try'), cpsTry
 

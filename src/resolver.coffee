@@ -3,8 +3,6 @@
 loglet = require 'loglet'
 errorlet = require 'errorlet'
 AST = require './ast'
-baseEnv = require './baseenv'
-Environment = require './environment'
 LexicalEnvironment = require './lexical'
 tr = require './trace'
 Transformer = require './transformer'
@@ -26,7 +24,7 @@ get = (ast) ->
 
 transform = (ast, env) ->
   resolved = _transform ast, env
-  anf = ANF.transform resolved
+  anf = ANF.transform resolved, env
   Transformer.transform AST.return(anf)
 
 _transform = (ast, env) ->
@@ -70,7 +68,9 @@ transformDefine = (ast, env) ->
     throw new Error("duplicate_define: #{ast.name}")
   res = _transform ast.value, env
   if env.level() == 0
+    console.log 'resolver.define', ast
     env.define ast.name, res
+    console.log 'resolver.define.after', ast
     AST.define ast.name, res
   else
     name = env.defineLocal ast.name, res
@@ -81,11 +81,10 @@ transformDefine = (ast, env) ->
 register AST.get('define'), transformDefine
 
 transformIdentifier = (ast, env) ->
-  #tr.log 'resolver.identifier', env.has(ast.name), JSON.stringify(env, null, 2)
-  if env.has ast.value
-    env.get ast.value
+  if env.has ast
+    ast
   else
-    throw errorlet.create {error: 'RESOLVER.transform:unknown_identifier', id: ast.value}  
+    throw errorlet.create {error: 'RESOLVER.transform:unknown_identifier', id: ast}  
   
 register AST.get('symbol'), transformIdentifier
 

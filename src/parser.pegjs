@@ -88,7 +88,7 @@ funcParametersExp
 = '(' _ params:funcParameterExp* _ ')' _ { return params; }
 
 funcParameterExp
-= param:SymbolExp _ ','? _ { return helper.param(param.value); }
+= param:SymbolExp _ ','? _ { return helper.param(param); }
 
 /************************************************************************
 TaskDeclExp
@@ -98,12 +98,6 @@ TaskDeclExp
 
 taskDeclHeadExp 
 = 'task'
-
-funcParametersExp
-= '(' _ params:funcParameterExp* _ ')' _ { return params; }
-
-funcParameterExp
-= param:SymbolExp _ ','? _ { return helper.param(param.value); }
 
 TaskExpression
 = IfTaskExp

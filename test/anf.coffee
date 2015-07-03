@@ -1,5 +1,7 @@
 anf = require '../src/anf'
 AST = require '../src/ast'
+baseEnv = require '../src/baseenv'
+Lexical = require '../src/lexical'
 assert = require 'assert'
 loglet = require 'loglet'
 errorlet = require 'errorlet'
@@ -9,7 +11,7 @@ describe 'anf test', ->
   canTransform = (ast, expected) ->
     it "can transform #{ast}", (done) ->
       try 
-        actual = anf.transform ast
+        actual = anf.transform ast, new Lexical(baseEnv)
         loglet.log '&&&&&&&&&&&&&&&&&&&&&&& ANF transform', ast
         loglet.log actual
         if not (expected == undefined)
@@ -45,7 +47,7 @@ describe 'anf test', ->
       ]
     ), undefined
   
-  canTransform AST.define('foo',
+  canTransform AST.define(AST.symbol('foo'),
       AST.binary('+', 
         AST.number(5), 
         AST.binary('-', 
@@ -53,7 +55,7 @@ describe 'anf test', ->
           AST.number(11)
         )
       )
-    )
+    ), undefined
   
   canTransform AST.object([
         [
@@ -78,7 +80,7 @@ describe 'anf test', ->
       ]
     )
   canTransform AST.block([
-      AST.define('obj',
+      AST.define(AST.symbol('obj'),
         AST.object([
             [
               'foo'

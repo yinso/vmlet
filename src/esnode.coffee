@@ -77,7 +77,7 @@ assign = (name, val) ->
 
 function_ = (name, params, body) ->
   type: 'FunctionExpression'
-  id: identifier(name)
+  id: name
   params: params
   defaults: []
   body: body
@@ -87,6 +87,13 @@ function_ = (name, params, body) ->
 return_ = (value) ->
   type: 'ReturnStatement'
   argument: value
+
+unary = (op, val) ->
+  type: 'UnaryExpression'
+  operator: op 
+  argument: val 
+  prefix: true
+
 
 binary = (op, lhs, rhs) ->
   type: 'BinaryExpression'
@@ -165,6 +172,7 @@ module.exports =
   assign: assign
   function: function_
   return: return_
+  unary: unary
   binary: binary
   throw: throw_
   catch: catch_ 

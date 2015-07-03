@@ -26,7 +26,7 @@ class GensymTable
     @tempName = 0
     @inner = {}
   gensym: (prefix = '__') ->
-    prefix + "$" + @symid(prefix)
+    AST.symbol(prefix + "$" + @symid(prefix))
   symid: (prefix = '__') ->
     @inner[prefix] = @inner[prefix] or 0
     @inner[prefix]++
@@ -34,15 +34,17 @@ class GensymTable
     name = "_$" + numToBase62(@tempName++) 
     AST.symbol name 
 
+# our lexical environment must be able to deal with symbols directly, rather than just strings.
+
 class LexicalEnvironment extends Environment
   @defaultPrefix = '___'
   @fromParams: (params, prev = baseEnv) ->
-    env = new @ {}, prev
+    env = new @ prev
     for param in params
       env.defineParam param
     env
   constructor: (prev = null) ->
-    super {}, prev
+    super prev
     @symMap = 
       if @prev instanceof @constructor
         @prev.symMap
@@ -51,16 +53,21 @@ class LexicalEnvironment extends Environment
   defineParam: (param) ->
     @define param.name, param
     param
-  defineLocal: (name, val) ->
-    sym = @symMap.gensym name 
-    @define name, AST.symbol(sym)
-    sym 
+  defineLocal: (sym, val) ->
+    if @has sym 
+      newSym = @symMap.gensym sym.value 
+      #@define name, AST.symbol(sym)
+      @define sym, newSym
+      newSym
+    else
+      @define sym, val 
+      sym
   mapParam: (param) ->
     sym = @defineRef param.name
     AST.make 'param', sym, param.type, param.default
   defineTemp: (exp) ->
     sym = @symMap.temp()
-    @define sym.value, exp 
+    @define sym, exp 
     sym 
   gensym: (prefix = LexicalEnvironment.defaultPrefix) ->
     @symMap.gensym prefix

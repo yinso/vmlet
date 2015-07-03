@@ -1,6 +1,10 @@
 Environment = require './environment'
 loglet = require 'loglet'
 fs = require 'fs'
+AST = require './ast'
+
+# are these specifically Environment's job? I would say they are not!.
+# what we are really trying to do now isn't to have functions that are kept track via 
 
 class BaseEnv extends Environment
   makeSync: (funcMaker) ->
@@ -14,9 +18,9 @@ class BaseEnv extends Environment
       value: {async: true}
     func
   defineSync: (key, funcMaker) ->
-    @define key, @makeSync funcMaker
+    @define AST.symbol(key), @makeSync funcMaker
   defineAsync: (key, funcMaker) ->
-    @define key, @makeAsync funcMaker
+    @define AST.symbol(key), @makeAsync funcMaker
   
 baseEnv = new BaseEnv()
 
@@ -33,6 +37,6 @@ baseEnv.defineSync '!=', (_rt) -> (a, b) -> a != b
 baseEnv.defineSync 'isNumber', (_rt) ->
   (a) -> 
     typeof(a) == 'number' or a instanceof Number
-baseEnv.define 'console', console
+baseEnv.define AST.symbol('console'), console
 
 module.exports = baseEnv

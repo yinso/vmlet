@@ -1,8 +1,6 @@
 #loglet = require '#loglet'
 errorlet = require 'errorlet'
 AST = require './ast'
-baseEnv = require './baseenv'
-Environment = require './environment'
 LexicalEnvironment = require './lexical'
 tr = require './trace'
 
@@ -26,7 +24,7 @@ override = (ast, transformer) ->
 assign = (ast, env, block, sym = LexicalEnvironment.defaultPrefix) ->
   sym = env.defineTemp ast 
   console.log 'anf.assign', sym
-  block.push AST.local sym.value, ast
+  block.push AST.local sym, ast
   sym
   #varName = env.assign ast, sym
   #block.push AST.tempvar(varName, ast)
@@ -59,8 +57,7 @@ normalizeBlock = (ast) ->
   else
     AST.block items
 
-# this version doesn't use ANF the type... it just uses BLOCK instead.
-transform = (ast, env = new LexicalEnvironment(baseEnv), block = AST.block([])) ->
+transform = (ast, env, block = AST.block([])) ->
   _transform ast, env, block
   normalize block
 
@@ -114,7 +111,9 @@ register AST.get('block'), transformBlock
 transformDefine = (ast, env, block) ->
   ##loglet.log '--anf.define', ast
   res = transform ast.value, env
-  env.define ast.name, res
+  console.log 'ANF.define', ast
+  #env.define ast.name, res
+  console.log 'ANF.define.after', ast
   block.push AST.define(ast.name, res)
   res
 
@@ -208,7 +207,7 @@ transformCatch = (ast, env, block) ->
 
 transformFinally = (ast, env, block) ->
   newEnv = new LexicalEnvironment env
-  body = _transform ast.body, newEnv
+  body = transform ast.body, newEnv
   AST.finally body
 
 transformTry = (ast, env, block) ->

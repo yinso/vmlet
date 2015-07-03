@@ -55,7 +55,11 @@ T.register 'return', ($r) ->
   catches = 
     for handler in $catches
       T.transform AST.return(handler)
-  final = T.transform $finally
+  final = 
+    if $finally 
+      T.transform $finally
+    else
+      null 
   AST.try body, catches, final
 
 T.register 'return', ($r) -> 

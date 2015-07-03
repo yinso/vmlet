@@ -2,7 +2,6 @@ vm = require 'vm'
 loglet = require 'loglet'
 errorlet = require 'errorlet'
 
-Environment = require './environment'
 parser = require './parser'
 AST = require './ast'
 RESOLVER = require './resolver'
@@ -105,7 +104,7 @@ class Runtime
           Unit.unit
     ###
     # now the biggest challenge starts!
-    @define 'fs',
+    @define AST.symbol('fs'),
       readFile: @makeAsync (_rt) ->
         readFile = _rt.member(fs, 'readFile')
         (args...) ->
