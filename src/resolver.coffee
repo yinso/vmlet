@@ -38,6 +38,7 @@ register AST.get('number'), transformScalar
 register AST.get('bool'), transformScalar
 register AST.get('null'), transformScalar
 register AST.get('string'), transformScalar
+register AST.get('ref'), transformScalar
 
 transformBinary = (ast, env) ->
   lhs = _transform ast.lhs, env
@@ -66,20 +67,13 @@ register AST.get('block'), transformBlock
 transformDefine = (ast, env) ->
   if env.has ast.name 
     throw new Error("duplicate_define: #{ast.name}")
+  ref = env.define ast.name 
   res = _transform ast.value, env
+  ref.value = res # update the value.
   if env.level() == 0
-    console.log 'resolver.define', ast
-    ref = env.define ast.name, res
-    console.log 'resolver.define.after', ast
     ref.define()
-    #AST.define ref, res
   else
-    ref = env.define ast.name, res
     ref.local()
-    #name = env.define ast.name, res
-    #local = AST.local name, res
-    #tr.log '--transform.define.local', ast.name, res, name, local
-    #local
 
 register AST.get('define'), transformDefine
 
@@ -142,12 +136,15 @@ register AST.get('param'), transformParam
 makeProc = (type) ->
   (ast, env) ->
     newEnv = new SymbolTable env
-    if ast.name
-      newEnv.define ast.name, AST.symbol(ast.name)
     params = 
       for param in ast.params
         newEnv.defineParam param
     decl = AST.make type, ast.name, params, null 
+    if ast.name 
+      if env.has(ast.name) and env.get(ast.name).isPlaceholder()
+        env.get(ast.name).value = decl
+      else # it's not defined at a higher level, we need to create our own definition.
+        newEnv.define ast.name , decl 
     body = _transform ast.body, newEnv
     decl.body = body
     Transformer.transform decl

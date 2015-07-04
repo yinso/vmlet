@@ -38,7 +38,7 @@ class Repl extends EventEmitter
         repl.errorWriteLine "#{err}"
         if err.fileName
           repl.errorWriteLine "-- on #{err.fileName}, #{err.lineNumber}"
-          
+        repl.errorWriteLine err.stack
       onResult: (repl, res) ->
         repl.writeLine "#{res}"
       onParse: (repl, text) ->

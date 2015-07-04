@@ -1,5 +1,6 @@
 AST = require './ast'
 HashMap = require './hashmap'
+tr = require './trace'
 
 # 
 # a symbol table that will hold all of the hierarchical needs of the symbols...
@@ -36,6 +37,7 @@ class SymbolTable
     else
       @prev?.get(sym) or undefined
   define: (sym, val) -> # returns the REF. this is where we are tracking for somethings very specific...
+    console.log 'SymbolTable.define', sym, val, @inner
     if @_has sym
       throw new Error("duplicate_identifier: #{sym}")
     else if @prev?.has sym 
@@ -53,15 +55,10 @@ class SymbolTable
       AST.symbol "_$#{@temp++}"
   defineParam: (param) ->
     ref = @define param.name, param 
-    #param.name = ref # this recursion is not good... 
-    ref 
+    param
   defineTemp: (val) ->
-    # generate a temp name... if we do it right it shouldn't matter what name it is...
-    # every single 
     sym = @gensym()
     @define sym, val
-  defineLocal: (sym, val) ->
-    
   set: (sym, val) -> # this is something that really isn't needed any more...
     if not @_has sym 
       throw new Error("undefined_identifier: #{sym}")

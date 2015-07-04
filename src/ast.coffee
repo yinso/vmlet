@@ -293,8 +293,10 @@ AST.register class REF extends AST
     
   _equals: (v) -> @ == v
   isAsync: () -> false
+  isPlaceholder: () ->
+    not @value
   toString: () ->
-    "{REF #{@name} #{@value}}"
+    "{REF #{@name}}"
   local: () ->
     AST.local @, @value
   define: () ->
@@ -402,7 +404,8 @@ AST.register class PROCEDURE extends AST
         buffer.push ", "
       buffer.push param.toString()
     buffer.push ") "
-    buffer.push @body.toString()
+    if @body 
+      buffer.push @body.toString()
     if @returns
       @buffer.push " : ", @returns.toString()
     buffer.push "}"

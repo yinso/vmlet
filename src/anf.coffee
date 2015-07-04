@@ -72,6 +72,7 @@ register AST.get('number'), transformScalar
 register AST.get('bool'), transformScalar
 register AST.get('null'), transformScalar
 register AST.get('string'), transformScalar
+register AST.get('ref'), transformScalar
 
 transformProc = (ast, env, block) ->
   assign ast, env, block
@@ -105,11 +106,8 @@ transformBlock = (ast, env, block) ->
 register AST.get('block'), transformBlock
 
 transformDefine = (ast, env, block) ->
-  ##loglet.log '--anf.define', ast
-  res = transform ast.value, env
   console.log 'ANF.define', ast
-  #env.define ast.name, res
-  console.log 'ANF.define.after', ast
+  res = transform ast.value, env
   block.push AST.define(ast.name, res)
   res
 
