@@ -3,7 +3,7 @@
 loglet = require 'loglet'
 errorlet = require 'errorlet'
 AST = require './ast'
-LexicalEnvironment = require './lexical'
+SymbolTable = require './symboltable'
 tr = require './trace'
 Transformer = require './transformer'
 ANF = require './anf'
@@ -55,7 +55,7 @@ transformIf = (ast, env) ->
 register AST.get('if'), transformIf
 
 transformBlock = (ast, env) ->
-  newEnv = new LexicalEnvironment env
+  newEnv = new SymbolTable env
   items = 
     for i in [0...ast.items.length]
       _transform ast.items[i], newEnv
@@ -69,20 +69,24 @@ transformDefine = (ast, env) ->
   res = _transform ast.value, env
   if env.level() == 0
     console.log 'resolver.define', ast
-    env.define ast.name, res
+    ref = env.define ast.name, res
     console.log 'resolver.define.after', ast
-    AST.define ast.name, res
+    ref.define()
+    #AST.define ref, res
   else
-    name = env.defineLocal ast.name, res
-    local = AST.local name, res
-    tr.log '--transform.define.local', ast.name, res, name, local
-    local
+    ref = env.define ast.name, res
+    ref.local()
+    #name = env.define ast.name, res
+    #local = AST.local name, res
+    #tr.log '--transform.define.local', ast.name, res, name, local
+    #local
 
 register AST.get('define'), transformDefine
 
 transformIdentifier = (ast, env) ->
+  console.log 'RESOLVER.identifier', ast, env
   if env.has ast
-    ast
+    env.get ast
   else
     throw errorlet.create {error: 'RESOLVER.transform:unknown_identifier', id: ast}  
   
@@ -137,7 +141,7 @@ register AST.get('param'), transformParam
 
 makeProc = (type) ->
   (ast, env) ->
-    newEnv = new LexicalEnvironment env
+    newEnv = new SymbolTable env
     if ast.name
       newEnv.define ast.name, AST.symbol(ast.name)
     params = 
@@ -158,18 +162,18 @@ transformThrow = (ast, env) ->
 register AST.get('throw'), transformThrow
 
 transformCatch = (ast, env) ->
-  newEnv = new LexicalEnvironment env
+  newEnv = new SymbolTable env
   ref = newEnv.defineParam ast.param
   body = _transform ast.body, newEnv
   AST.make 'catch', ast.param, body
 
 transformFinally = (ast, env) ->
-  newEnv = new LexicalEnvironment env
+  newEnv = new SymbolTable env
   body = _transform ast.body, newEnv
   AST.make 'finally', body
 
 transformTry = (ast, env) ->
-  newEnv = new LexicalEnvironment env
+  newEnv = new SymbolTable env
   body = _transform ast.body, newEnv
   catches = 
     for c in ast.catches

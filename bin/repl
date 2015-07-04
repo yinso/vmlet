@@ -5,8 +5,7 @@ loglet = require 'loglet'
 yargs = require('yargs')
   .alias('d', 'debug')
 
-baseEnv = require '../src/baseenv'
-vm = new Runtime(baseEnv)
+vm = new Runtime()
 
 if yargs.argv.debug
   loglet.setKeys yargs.argv.debug

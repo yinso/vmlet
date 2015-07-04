@@ -57,6 +57,8 @@ AST.register class SYMBOL extends AST
   constructor: (@value, @suffix = undefined) ->
   _equals: (v) ->
     @value == v.value and @suffix == v.suffix
+  nested: () ->
+    new @ @value, if @suffix == undefined then 1 else @suffix + 1 
   toString: () ->
     if @suffix
       "{SYM #{@value};#{@suffix}}"
@@ -291,8 +293,14 @@ AST.register class REF extends AST
     
   _equals: (v) -> @ == v
   isAsync: () -> false
+  toString: () ->
+    "{REF #{@name} #{@value}}"
   local: () ->
-    AST.local @name, @value
+    AST.local @, @value
+  define: () ->
+    AST.define @, @value
+  assign: () ->
+    AST.assign @, @value
   toESNode: () ->
     @name.toESNode()
   selfESNode: () ->

@@ -1,7 +1,6 @@
 anf = require '../src/anf'
 AST = require '../src/ast'
-baseEnv = require '../src/baseenv'
-Lexical = require '../src/lexical'
+SymbolTable = require '../src/symboltable'
 assert = require 'assert'
 loglet = require 'loglet'
 errorlet = require 'errorlet'
@@ -11,7 +10,7 @@ describe 'anf test', ->
   canTransform = (ast, expected) ->
     it "can transform #{ast}", (done) ->
       try 
-        actual = anf.transform ast, new Lexical(baseEnv)
+        actual = anf.transform ast, new SymbolTable()
         loglet.log '&&&&&&&&&&&&&&&&&&&&&&& ANF transform', ast
         loglet.log actual
         if not (expected == undefined)

@@ -7,10 +7,9 @@ AST = require './ast'
 RESOLVER = require './resolver'
 require './ret'
 CPS = require './cps'
-baseEnv = require './baseenv'
+SymbolTable = require './symboltable'
 Unit = require './unit'
 util = require './util'
-LexicalEnvironment = require './lexical'
 TR = require './trace'
 
 esnode = require './esnode'
@@ -63,7 +62,7 @@ class Session
 # in this version we don't really know the object itself... hmmm... 
   
 class Runtime
-  constructor: (@baseEnv = baseEnv) ->
+  constructor: (@baseEnv = new SymbolTable()) ->
     loglet.log 'Runtime.ctor'
     @parser = parser
     @AST = AST
@@ -112,7 +111,7 @@ class Runtime
     @context = vm.createContext { _rt: @ , console: console , process: process }
   unit: Unit.unit
   define: (key, val) ->
-    baseEnv.define key, val
+    @baseEnv.define key, val
   makeProc: (func, def) -> 
     Object.defineProperty func, '__vmlet',
       value: 
@@ -146,7 +145,7 @@ class Runtime
       loglet.log '-------- Runtime.eval =>', stmt
       ast = @parse stmt 
       loglet.log '-------- Runtime.parsed =>', ast
-      ast = RESOLVER.transform ast, new LexicalEnvironment(@baseEnv)
+      ast = RESOLVER.transform ast, new SymbolTable(@baseEnv)
       loglet.log '-------- Runtime.transformed =>', ast
       ast = CPS.transform ast
       loglet.log '-------- Runtime.cpsed =>', ast

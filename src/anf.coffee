@@ -1,7 +1,7 @@
 #loglet = require '#loglet'
 errorlet = require 'errorlet'
 AST = require './ast'
-Environment = require './lexical'
+Environment = require './symboltable'
 tr = require './trace'
 
 _transTypes = {}
