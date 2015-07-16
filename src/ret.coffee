@@ -79,11 +79,17 @@ T.register 'return', ($r) ->
   T.transform $finally
 
 T.register 'local', ($l) -> 
+  console.log '--local.trans', $l.value
+  if not $l.value
+    return false
   val = $l.value
   val.type() in atomicTypes
 , ($l) -> $l
 
 T.register 'local', ($l) -> 
+  console.log '--local.trans.if', $l.value
+  if not $l.value
+    return false
   val = $l.value
   console.log 'local.if', val.type() == 'if', val
   if val.type() == 'if'
@@ -97,6 +103,9 @@ T.register 'local', ($l) ->
   ]
 
 T.register 'local', ($l) -> 
+  console.log '--local.trans.block', $l.value
+  if not $l.value
+    return false
   val = $l.value
   if val.type() == 'block'
     val.items
@@ -112,7 +121,10 @@ T.register 'local', ($l) ->
   AST.block items
 
 T.register 'local', ($l) -> 
-  val = $l.normalized()
+  console.log '--local.trans.try', $l.value
+  if not $l.value
+    return false
+  val = $l.value
   if val.type() == 'try'
     [ val.body, val.catches, val.finally ]
   else

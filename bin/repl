@@ -17,27 +17,35 @@ multiLineExpRE = /^\s*(begin|\{|\(|def|func|table|tuple|relation|if|create|type|
 
 emptyLineRE = /^\s*$/
 
-repl.start
-  prompt: 'V> '
-  onParse: (repl, cmd) ->
-    try
-      if cmd.match emptyLineRE # empty line, return value to supress error
-        {state: 'ok', parsed: undefined}
-      else
-        {state: 'ok', parsed: vm.parse(cmd)}
-    catch e
-      if cmd.match multiLineExpRE # multi-line; not completed yet
-        {state: 'more', parsed: cmd}
-      else
-        {state: 'error', parsed: e}
-  historyFile: '.vmlet-history.log'
-  onEval: (repl, cmd, exp, cb) ->
-    if not exp
-      cb null, exp
+if yargs.argv._.length > 0 # we have a file to load. 
+  filePath = yargs.argv._[yargs.argv._.length - 1]
+  vm.import filePath , (err, res) ->
+    if err 
+      loglet.croak err 
     else
-      vm.eval cmd, cb
-  onResult: (repl, res) ->
-    if res != undefined
-      repl.writeLine res
-  onTabCompletion: (repl, text) ->
-    []
+      process.exit()
+else 
+  repl.start
+    prompt: 'V> '
+    onParse: (repl, cmd) ->
+      try
+        if cmd.match emptyLineRE # empty line, return value to supress error
+          {state: 'ok', parsed: undefined}
+        else
+          {state: 'ok', parsed: vm.parse(cmd)}
+      catch e
+        if cmd.match multiLineExpRE # multi-line; not completed yet
+          {state: 'more', parsed: cmd}
+        else
+          {state: 'error', parsed: e}
+    historyFile: '.vmlet-history.log'
+    onEval: (repl, cmd, exp, cb) ->
+      if not exp
+        cb null, exp
+      else
+        vm.eval cmd, cb
+    onResult: (repl, res) ->
+      if res != undefined
+        repl.writeLine res
+    onTabCompletion: (repl, text) ->
+      []

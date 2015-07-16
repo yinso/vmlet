@@ -105,7 +105,14 @@ AST.register class MEMBER extends AST
   toString: () ->
     "{MEMBER #{@head} #{@key}}"
   toESNode: () ->
-    esnode.member @head.toESNode(), @key.toESNode()
+    head = @head.toESNode()
+    key = 
+      if @key.type() == 'symbol'
+        esnode.literal(@key.value)
+      else
+        @key.toESNode()
+    esnode.funcall esnode.member(esnode.identifier('_rt'), esnode.identifier('member')), [ head , key ]
+    #esnode.member @head.toESNode(), @key.toESNode()
   canReduce: () ->
     @head.canReduce()
   selfESNode: () ->
@@ -256,7 +263,26 @@ AST.register class DEFINE extends AST
   toString: () ->
     "{DEFINE #{@name} #{@value}}"
   toESNode: () ->
-    esnode.declare 'var', [ @name.toESNode(), @value.toESNode() ]
+    name = 
+      switch @name.type()
+        when 'ref'
+          esnode.literal @name.name.value
+        when 'symbol'
+          esnode.literal @name.value
+        else
+          throw new Error("AST.define.toESNode:unknown_name_type: #{@name}")
+    value = 
+      esnode.funcall esnode.member(esnode.identifier('_module'), esnode.identifier('define')),
+        [ name , @value.toESNode() ]
+    id = 
+      switch @name.type()
+        when 'ref'
+          @name.normalName().toESNode()
+        when 'symbol'
+          @name.toESNode()
+        else
+          throw new Error("AST.define.toESNode:unknown_name_type: #{@name}")
+    esnode.declare 'var', [ id, value ]
   canReduce: () -> true # this is actually not necessarily true...!!!
   selfESNode: () ->
     @baseSelfESNode @name.selfESNode(), @value.selfESNode()
@@ -290,21 +316,32 @@ AST.register class LOCAL extends AST
 AST.register class REF extends AST 
   @type: 'ref'
   constructor: (@name, @value) ->
-    
+    @isDefine = false
   _equals: (v) -> @ == v
   isAsync: () -> false
   isPlaceholder: () ->
     not @value
   toString: () ->
-    "{REF #{@name}}"
-  local: () ->
-    AST.local @, @value
+    if @isDefine
+      "{REF !#{@name}}"
+    else
+      "{REF #{@name}}"
   define: () ->
-    AST.define @, @value
+    if @isDefine
+      AST.define @, @value
+    else
+      AST.local @, @value
   assign: () ->
     AST.assign @, @value
   toESNode: () ->
-    @name.toESNode()
+    if @value.type() == 'proxyval'
+      @value.toESNode()
+    else if @isDefine
+      esnode.funcall esnode.member(esnode.identifier('_module'), esnode.identifier('get')), [ esnode.literal(@name.value) ]
+    else
+      @name.toESNode()
+  normalName: () ->
+    @name
   selfESNode: () ->
     @baseSelfESNode @name.toESNode(), @value.toESNode()
 
@@ -327,25 +364,22 @@ AST.register class TEMPVAR extends AST
   selfESNode: () ->
     @baseSelfESNode esnode.literal(@name), @value.selfESNode(), esnode.literal(@suffix)
 
-# PROXYVAL - used to hold the actual value of the 
-
-AST.register class PROXYVAL extends AST
+# PROXYVAL 
+# used to hold special transformation logic. 
+# it acts similar to references but are used for underlying transformations...
+# This generally should only be used by the compiler.
+AST.register class PROXYVAL extends AST 
   @type: 'proxyval'
-  constructor: (@name, @value, @_compile = null) ->
-  # compile is used by compiler to generate the final text.
-  compile: () ->
-    if @_compile
-      @_compile(@)
-    else
-      @name # returning the name is the default.
-  _equals: (v) ->
-    @name == v.name and @value.equals(v.value)
-  toString: () ->
-    "{PROXYVAL #{@name} #{@value}}"
+  constructor: (@name, @compiler) ->
   toESNode: () ->
-    esnode.declare 'var', [ esnode.identifier(@name), @value.toESNode() ]
+    if typeof(@compiler) == 'function' or @compiler instanceof Function 
+      @compiler()
+    else if @compiler instanceof AST
+      @compiler.toESNode()
+    else
+      @name
   selfESNode: () ->
-    @baseSelfESNode esnode.literal(@name), @value.selfESNode(), esnode.literal(@_compile)
+    @baseSelfESNode esnode.literal(@name), @esnode.literal(@compiler)
 
 AST.register class PARAM extends AST
   constructor: (@name, @paramType = null, @default = null) ->
@@ -366,6 +400,8 @@ AST.register class PARAM extends AST
       true
     else
       false
+  ref: () -> 
+    AST.ref @name , @
   toString: () ->
     if @paramType and @default
       "{PARAM #{@name} #{@paramType} = #{@default}}"
@@ -412,7 +448,7 @@ AST.register class PROCEDURE extends AST
     buffer.join ''
   toESNode: () ->
     func = esnode.function @name?.toESNode() or null, (param.toESNode() for param in @params), @body.toESNode()
-    maker = esnode.member(esnode.identifier('_rt'), esnode.identifier('makeProc'))
+    maker = esnode.member(esnode.identifier('_rt'), esnode.identifier('proc'))
     #esnode.funcall maker, [ func , @selfESNode() ]
     esnode.funcall maker, [ func ]
   selfESNode: () ->
@@ -424,6 +460,8 @@ AST.register class PROCEDURE extends AST
 AST.register class TASK extends AST
   @type: 'task'
   constructor: (@name, @params, @body, @returns = null) ->
+    @callbackParam = AST.param AST.symbol('cb')
+    @errorParam = AST.param AST.symbol('e')
   _equals: (v) ->
     if @name == @name
       for param, i in @params
@@ -443,6 +481,61 @@ AST.register class TASK extends AST
       esnode.array(param.selfESNode() for param in @params )
     name = if @name then esnode.identifier(@name) else esnode.null_()
     @baseSelfESNode name, params, @body.selfESNode(), @returns?.selfESNode() or esnode.literal(@returns)
+
+AST.register class TOPLEVEL extends AST 
+  @type: 'toplevel'
+  constructor: (@body) ->
+    @moduleParam = AST.param(AST.symbol('_module'))
+    @callbackParam = AST.param(AST.symbol('_done'))
+    @errorParam = AST.param AST.symbol('e')
+    switch @body.type()
+      when 'block'
+        @body = @normalizeBlock @body
+      when 'define'
+        @body = @normalizeDefine @body
+      else
+        @body = @normalizeOther @body
+  normalizeBlock: (body) ->
+    if body.items.length == 1 and body.items[0].type() == 'define'
+      body.push AST.unit()
+    body
+  normalizeDefine: (body) ->
+    AST.block [ 
+        body 
+        AST.unit()
+      ]
+  normalizeOther: (body) ->
+    AST.block [
+        body 
+      ]
+  _equals: (v) ->
+    @body.equals v.body 
+  isAsync: () -> true 
+  toString: () ->
+    "{TOPLEVEL #{@body}}"
+  toESNode: () ->
+    esnode.funcall esnode.member(esnode.identifier('_rt'), esnode.identifier('toplevel')),
+      [ 
+        esnode.function null, [ @moduleParam.toESNode(), @callbackParam.toESNode() ], @body.toESNode()
+        esnode.member(esnode.identifier('_rt'), esnode.identifier('main'))
+      ]
+  selfESNode: () ->
+    @baseSelfESNode @body.selfESNode()
+
+AST.register class MODULE extends AST
+  @type: 'module'
+  constructor: (@body) ->
+  _equals: (v) ->
+    @body.equals v.body 
+  isAsync: () -> false
+  toString: () ->
+    "{MODULE #{@body}}"
+  toESNode: () ->
+    # _rt.module(id, function(module, deps...) { })
+    esnode.funcall esnode.member(esnode.identifier('_rt'), esnode.identifier('module')),
+      [
+        @body.toESNode()
+      ]
 
 AST.register class IF extends AST
   @type: 'if'
@@ -599,6 +692,21 @@ AST.register class TRY extends AST
     catches = esnode.array(exp.selfESNode() for exp in @catches)
     final = @finally?.selfESNode() or esnode.literal(@finally)
     @baseSelfESNode @body.selfESNode(), catches, final
+
+AST.register class IMPORT extends AST
+  @type: 'import'
+  constructor: (@spec, @bindings = []) ->
+    # the spec ought to have a way to be translated for mapping...!
+    @idParam = @normalizeSpec @spec
+  normalizeSpec: () ->
+    # spec is going to be a string...
+    AST.param AST.symbol @spec.value.replace /\.\/\\/g, '_' 
+  toString: () ->
+    "{IMPORT #{@spec}}"
+  toESNode: () ->
+    esnode.declare 'var', (@bindingESNode(binding) for binding in @bindings)
+  bindingESNode: (binding) ->
+    [ binding.toESNode() , esnode.member(@idParam.toESNode(), esnode.literal(binding.value)) ]
 
 ###
 

@@ -11,6 +11,7 @@ SymbolTable = require './symboltable'
 Unit = require './unit'
 util = require './util'
 TR = require './trace'
+UNIQ = require './unique'
 
 esnode = require './esnode'
 escodegen = require 'escodegen'
@@ -51,73 +52,80 @@ class Session
   async: (func, args..., cb) ->
     {func: func, args: args, cb: cb}
 
-# let's do most of the work in transformations!
-# i.e. the compiler should just be something that automates the process...
-
-# compiled time environment and runtime environment are now definition going to be different...
-# in order to do so we should retain as much information as possible about the object that is being created.
-# when it's being referenced - i.e. keep the high level defintiion of the object 
-# something like... 
-# 
-# in this version we don't really know the object itself... hmmm... 
+class Module 
+  constructor: (@prevEnv = null) ->
+    @inner = {}
+    @imports = {}
+    @exports = {}
+    @depends = [] # list of modules that this module depends on...
+    @env = new SymbolTable(@prevEnv)
+  define: (key, val) ->
+    @inner[key] = val
+    #@env.define AST.symbol(key), val # the value needs to be just a ref I think...
+    val
+  export: (key, as = key) ->
+  import: (keys = []) ->
+    if keys.length > 0 
+      res = []
+      for key in keys 
+        res[key] = @get key
+      res
+    else
+      @exports
+  has: (key) ->
+    @inner.hasOwnProperty(key)
+  get: (key) ->
+    if not @has key
+      throw new Error("Module.unknown_identifier: #{key}")
+    @inner[key]
   
+class Toplevel 
+  constructor: (@proc, @module) ->
+  eval: (cb) ->
+    try 
+      @proc @module, cb
+    catch e 
+      cb e
+
+# we want something that signifies the global module and that's the baseEnv...
+# when we define a module we not only want to define 
 class Runtime
-  constructor: (@baseEnv = new SymbolTable()) ->
-    loglet.log 'Runtime.ctor'
+  constructor: (@baseEnv = new SymbolTable(), @main = new Module(@baseEnv)) ->
     @parser = parser
     @AST = AST
-#    @defineSync '+', (_rt) -> (a, b) -> a + b
-#    @defineSync '-', (_rt) -> (a, b) -> a - b
-#    @defineSync '*', (_rt) -> (a, b) -> a * b
-#    @defineSync '%', (_rt) -> (a, b) -> a % b
-#    @defineSync '>', (_rt) -> (a, b) -> a > b
-#    @defineSync '>=', (_rt) -> (a, b) -> a >= b
-#    @defineSync '<=', (_rt) -> (a, b) -> a <= b
-#    @defineSync '<', (_rt) -> (a, b) -> a < b
-#    @defineSync '==', (_rt) -> (a, b) -> a == b
-#    @defineSync '!=', (_rt) -> (a, b) -> a != b
-#    @defineSync 'isNumber', (_rt) ->
-#      (a) -> 
-#        typeof(a) == 'number' or a instanceof Number
-    ###
-    @define 'console', 
-      log: @makeSync (_rt) -> 
-        (args...) ->
-          console.log args...
-          Unit.unit
-      time: @makeSync (_rt) -> 
-        (args...) ->
-          console.time args...
-          Unit.unit
-      timeEnd: @makeSync (_rt) -> 
-        (args...) ->
-          console.timeEnd args...
-          Unit.unit
-      debug: @makeSync (_rt) -> 
-        (args...) ->
-          console.debug args...
-          Unit.unit
-      error: @makeSync (_rt) -> 
-        (args...) ->
-          console.error args...
-          Unit.unit
-    ###
     # now the biggest challenge starts!
-    @define AST.symbol('fs'),
+    @baseEnv.define AST.symbol('fs'),
       readFile: @makeAsync (_rt) ->
         readFile = _rt.member(fs, 'readFile')
         (args...) ->
           return readFile args...
+    @baseEnv.define AST.symbol('console'), AST.proxyval('console', AST.symbol('console'))
+    @baseEnv.define AST.symbol('import'), AST.proxyval('import', AST.member(AST.symbol('_rt'), AST.symbol('import')))
     @context = vm.createContext { _rt: @ , console: console , process: process }
   unit: Unit.unit
-  define: (key, val) ->
-    @baseEnv.define key, val
-  makeProc: (func, def) -> 
+  proc: (func, def) -> 
     Object.defineProperty func, '__vmlet',
       value: 
         sync: true
         def: def 
     func
+  task: (func, def) ->
+    Object.defineProperty func, '__vmlet',
+      value: 
+        sync: false
+        def: def 
+    func
+  member: (head, key) ->
+    res = head[key]
+    if util.isFunction(res)
+      (args...) ->
+        res.apply head, args
+    else
+      res
+  toplevel: (proc, module) ->
+    new Toplevel proc, module
+  module: (proc) ->
+    module = proc()
   makeSync: (funcMaker) ->
     func = funcMaker @
     func.__vmlet = {sync: true}
@@ -131,30 +139,52 @@ class Runtime
   defineAsync: (key, funcMaker) ->
     @define key, @makeAsync funcMaker
   compile: (ast) ->
-    node = esnode.expression esnode.funcall(esnode.function(null, [], esnode.block([esnode.return(ast.toESNode())])), [])
-    #TR.log '--to.esnode', node
-    escodegen.generate node
+    node = ast.toESNode()
+    compiled = '(' + escodegen.generate(node)  + ')'
+    loglet.log '-------- Runtime.compiled =>', compiled
+    vm.runInContext compiled, @context
   parse: (stmt) ->
-    @parser.parse stmt
+    ast = @parser.parse stmt
+    loglet.log '-------- Runtime.parsed =>', ast
+    ast
+  import: (filePath, cb) ->
+    # we will deal with external package path once things are loaded... 
+    if @isPackage filePath 
+      # there are a few things to deal with here... 
+      # 1 - things about loading the actual underlying node modules... 
+      try 
+        module = require filePath 
+        
+      catch e 
+        cb e 
+    else
+      try 
+        fs.readFile filePath, 'utf8', (err, data) =>
+          if err 
+            cb err 
+          else
+            try # this isn't really trying to 
+              parsed = AST.module @parse data 
+              ast = @transform ast 
+              compiled = @compile ast 
+              compiled.eval cb
+            catch e 
+              cb e
+      catch e 
+         cb e
+  isPackage: (filePath) -> 
+    false
   eval: (stmt, cb) ->
     if stmt == ':context'
       return cb null, @context
     else if stmt == ':env'
       return cb null, @baseEnv
     try 
-      loglet.log '-------- Runtime.eval =>', stmt
-      ast = @parse stmt 
-      loglet.log '-------- Runtime.parsed =>', ast
-      ast = RESOLVER.transform ast, new SymbolTable(@baseEnv)
-      loglet.log '-------- Runtime.transformed =>', ast
-      ast = CPS.transform ast
-      loglet.log '-------- Runtime.cpsed =>', ast
+      ast = AST.toplevel @parse stmt 
+      ast = @transform ast
       compiled = @compile ast
-      loglet.log '-------- Runtime.compiled =>', compiled
-      compiler = vm.runInContext compiled, @context
-      loglet.log '-------- Runtime.evaled =>', compiler
       try 
-        compiler @, (err, res) =>
+        compiled.eval (err, res) =>
           if err 
             cb err
           else if res instanceof Unit
@@ -167,15 +197,29 @@ class Runtime
         cb e
     catch e
       cb e
+  extractImports: (ast) ->
+    # imports should be @ at the top level expressions...
+    switch ast.type()
+      when 'toplevel', 'module'
+        @extractImports ast.body
+      when 'block'
+        results = []
+        for item in ast.items 
+          if item.type() == 'import'
+            results.push item 
+        results
+      when 'import'
+        [ ast ]
+      else
+        throw new Error("runtime.imports.invalid_expression: #{ast}")
+  transform: (ast, module = @main) ->
+    ast = RESOLVER.transform ast, module.env
+    loglet.log '-------- Runtime.transformed =>', ast, module.env
+    ast = CPS.transform ast
+    loglet.log '-------- Runtime.cpsed =>', ast
+    ast
   get: (key) ->
     @baseEnv.get key
-  member: (obj, key) ->
-    member = obj[key]
-    if util.isFunction(member)
-      (args...) ->
-        obj[key] args...
-    else
-      member
   promise: (func, args..., cb) ->
     loglet.log '_rt.promise', func, args, cb
     #p = Promise.defer()

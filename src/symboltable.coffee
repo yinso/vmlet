@@ -37,7 +37,6 @@ class SymbolTable
     else
       @prev?.get(sym) or undefined
   define: (sym, val) -> # returns the REF. this is where we are tracking for somethings very specific...
-    console.log 'SymbolTable.define', sym, val, @inner
     if @_has sym
       throw new Error("duplicate_identifier: #{sym}")
     else if @prev?.has sym 

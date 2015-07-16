@@ -73,6 +73,7 @@ register AST.get('bool'), transformScalar
 register AST.get('null'), transformScalar
 register AST.get('string'), transformScalar
 register AST.get('ref'), transformScalar
+register AST.get('unit'), transformScalar
 
 transformProc = (ast, env, block) ->
   assign ast, env, block
@@ -114,9 +115,13 @@ transformDefine = (ast, env, block) ->
 register AST.get('define'), transformDefine
 
 transformLocal = tr.trace 'anf.local', (ast, env, block) ->
-  res = transform ast.normalized(), env
-  cloned = ast.clone res
-  block.push cloned
+  res = 
+    if ast.value 
+      transform ast.value, env 
+    else
+      ast.value 
+  cloned = AST.local ast.name , res 
+  block.push cloned 
   cloned
 
 register AST.get('local'), transformLocal
@@ -218,6 +223,13 @@ transformTry = (ast, env, block) ->
   block.push AST.try(body, catches, fin)
 
 register AST.get('try'), transformTry
+
+transformImport = (ast, env, block) ->
+  for binding in ast.bindings 
+    env.define binding.name, binding
+  block.push ast
+
+register AST.get('import'), transformImport
 
 module.exports = 
   register: register

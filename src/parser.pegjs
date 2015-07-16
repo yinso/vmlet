@@ -40,10 +40,12 @@ Keywords
 / 'finally'
 / '<-'
 / '+'
+/ 'import'
 
 TopLevelExpression 
 = TaskExpression
 / Expression
+/ ImportExp
 
 Expression
 = exp:IfExp _ { return exp; }
@@ -312,10 +314,18 @@ symbolRestChar
 /************************************************************************
 TaskcallExp
 
-This should be in line with 
+This should be in line with FuncallExp
 ************************************************************************/
 TaskcallExp
 = '<-' _ inner:MemberExp _ { return helper.taskcall(inner); }
+
+/************************************************************************
+ImportExp
+
+This is done as a Taskcall... 
+************************************************************************/
+ImportExp
+= 'import' _ spec:StringExp _ { return helper.import(spec); }
 
 /************************************************************************
 MemberExp

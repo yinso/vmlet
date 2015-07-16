@@ -39,12 +39,26 @@ _temp = 0
 tempName = () -> 
   "__$#{_temp++}"
 
+stringify = (obj) ->
+  # what do we want to accomplish? 
+  # we want to 
+  cache = []
+  JSON.stringify obj, (key, val) ->
+    if typeof(val) == 'object' 
+      if cache.indexOf(val) == -1
+        cache.push val 
+        return val
+      else
+        return '#<PREV-REF>'
+    else
+      return val
+
 objToStr = (arg) ->
   if arg == null 
     return [ indent(2) + 'null' ]
   if arg == undefined 
     return [ indent(2) + 'undefined' ]
-  for str, i in JSON.stringify(arg, null, 2).split '\n'
+  for str, i in stringify(arg).split '\n'
     if i == 0 
       indent(2) + str
     else

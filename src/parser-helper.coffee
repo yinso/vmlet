@@ -81,6 +81,9 @@ taskDecl = (name, params, body, returns = null) ->
   #AST.make 'task', (if name then name.value else name), params, body, returns
   AST.make 'task', name, params, body, returns
 
+funcall = (proc, args) ->
+  AST.make 'funcall', proc, args
+
 taskcall = (inner) ->
   if AST.isa(inner, 'funcall')
     # await is an async funcall...
@@ -100,6 +103,9 @@ catchAST = (param, body) ->
 tryAST = (body, catches, fin) ->
   AST.make 'try', body, catches, fin
 
+import_ = (module, defs = []) ->
+  AST.import module, defs
+
 module.exports = 
   number: number
   bool: bool
@@ -117,10 +123,12 @@ module.exports =
   param: param
   function: funcDecl
   task: taskDecl
+  funcall: funcall
   taskcall: taskcall
   throw: throwAST
   try: tryAST
   catch: catchAST
   finally: finallyAST
+  import: import_
 
 

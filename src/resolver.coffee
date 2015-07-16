@@ -23,9 +23,15 @@ get = (ast) ->
     throw errorlet.create {error: 'resolver_unsupported_ast_type', type: ast.constructor.type}
 
 transform = (ast, env) ->
-  resolved = _transform ast, env
-  anf = ANF.transform resolved, env
-  Transformer.transform AST.return(anf)
+  switch ast.type()
+    when 'toplevel'
+      resolved = _transform ast.body, env
+      anf = ANF.transform resolved, env
+      AST.toplevel Transformer.transform AST.return(anf)
+    else
+      resolved = _transform ast, env
+      anf = ANF.transform resolved, env
+      Transformer.transform AST.return(anf)
 
 _transform = (ast, env) ->
   resolver = get(ast)
@@ -39,6 +45,7 @@ register AST.get('bool'), transformScalar
 register AST.get('null'), transformScalar
 register AST.get('string'), transformScalar
 register AST.get('ref'), transformScalar
+register AST.get('unit'), transformScalar
 
 transformBinary = (ast, env) ->
   lhs = _transform ast.lhs, env
@@ -56,13 +63,21 @@ transformIf = (ast, env) ->
 register AST.get('if'), transformIf
 
 transformBlock = (ast, env) ->
-  newEnv = new SymbolTable env
+  # block doesn't introduce new scoping... 
+  # maybe that's better... hmm...
+  # function and let introduce new scoping.
+  #newEnv = new SymbolTable env
   items = 
     for i in [0...ast.items.length]
-      _transform ast.items[i], newEnv
+      _transform ast.items[i], env
   AST.block items
 
 register AST.get('block'), transformBlock
+
+transformTopLevel = (ast, env) ->
+  AST.toplevel _transform(ast.body, env)
+
+register AST.get('toplevel'), transformTopLevel
 
 transformDefine = (ast, env) ->
   if env.has ast.name 
@@ -70,10 +85,10 @@ transformDefine = (ast, env) ->
   ref = env.define ast.name 
   res = _transform ast.value, env
   ref.value = res # update the value.
-  if env.level() == 0
-    ref.define()
-  else
-    ref.local()
+  #console.log '-- resolver.define', ref, env.level(), env
+  if env.level() <= 2 # this is arbitrary decided for now... base + toplevel block ?
+    ref.isDefine = true
+  ref.define()
 
 register AST.get('define'), transformDefine
 
@@ -183,6 +198,15 @@ transformTry = (ast, env) ->
   AST.make('try', body, catches, fin)
 
 register AST.get('try'), transformTry
+
+transformImport = (ast, env) ->
+  # when we are transforming import, we are introducing bindings.
+  if ast.bindings.length > 0
+    for binding in ast.bindings 
+      env.define binding.name, binding
+  ast
+
+register AST.get('import'), transformImport 
 
 module.exports =
   transform: transform

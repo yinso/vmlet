@@ -6,23 +6,37 @@ AST = require './ast'
 util = require './util'
 TR = require './trace'
 
-types = {}
+###
+There are basically two types we need to handle the CPS conversion for: TASK and TOPLEVEL.
 
-register = (ast, cps) ->
-  if types.hasOwnProperty(ast.type)
-    throw errorlet.create {error: 'CPS.duplicate_ast_type', type: ast.type}
-  else
-    types[ast.type] = cps
-  
-get = (ast) ->
-  if types.hasOwnProperty(ast.type())
-    types[ast.type()]
-  else
-    throw errorlet.create {error: 'CPS.unsupported_as_type', type: ast}
+The idea is simple. We add an implicit callback parameter, as well as continuation call for both regular and error 
+conditions. 
 
-override = (ast, cps) ->
-  types[ast.type] = cps
+TOPLEVE { exp exp2 ... expLast } 
+=> 
+function (_done) { 
+  try {
+    exp exp2 ... 
+    return _done(null, expLast); // whatever expLast evaluates to.
+  } catch (e) {
+    return _done(e);
+  }
+}
 
+TASK(arg, ...) {
+  exp ... expLast
+}
+=> 
+_rt.task(function (arg, ..., _done) {
+  try {
+    exp ... 
+    return _done(null, expLast); 
+  } catch (e) {
+    return _done(e);
+  }
+});
+
+###
 ###
 
 CPS occurs with a funcall being async.
@@ -92,67 +106,73 @@ That means until we can do so, we are stuck with one of the approaches...
 
 ###
 
+types = {}
 
-cps = (anf, contAST = AST.symbol('_done'), cbAST = contAST) ->
-  # the idea is that the last statement is the one that we want to return? 
-  # so if we push the return function in like this... what would happen? 
-  # {NUMBER 1}
-  # =>
-  # {ANF {RETURN NUMBER 1}}
-  # => 
-  # {ANF {RETURN {FUNCALL {SYMBOL CB} {NULL} {NUMBER 1}}}}
-  # 
-  # when compile the return function -> 
-  ast = AST.task(undefined,
-    [ AST.param(AST.symbol('_rt'))]
-    , anf
-  )
-  _cpsOne ast, contAST, cbAST
+register = (ast, cps) ->
+  if types.hasOwnProperty(ast.type)
+    throw errorlet.create {error: 'CPS.duplicate_ast_type', type: ast.type}
+  else
+    types[ast.type] = cps
+  
+get = (ast) ->
+  if types.hasOwnProperty(ast.type())
+    types[ast.type()]
+  else
+    throw errorlet.create {error: 'CPS.unsupported_as_type', type: ast}
 
+override = (ast, cps) ->
+  types[ast.type] = cps
 
-cpsBlock = (anf, contAST, cbAST) ->
-  for i in [anf.items.length - 1 ..0] by -1
-    contAST = _cpsOne anf.items[i], contAST, cbAST
-  normalize contAST
+runtimeParam = AST.param(AST.symbol('_rt'))
+callbackParam = AST.param(AST.symbol('_done'))
+errorParam = AST.param(AST.symbol('e'))
+cbAST = callbackParam.ref()
 
-register AST.get('block'), cpsBlock
+cps = (ast) ->
+  switch ast.type()
+    when 'task'
+      cpsTask ast
+    when 'toplevel'
+      cpsTopLevel ast
+    else # this should error!
+      throw new Error("CPS:unsupported_toplevel_type: #{ast}")
 
 _cpsOne = (item, contAST, cbAST) ->
-  #loglet.log '--cps.one', item, contAST, cbAST
   cpser = get item
   cpser item, contAST, cbAST
 
-cpsTaskcall = (ast, contAST, cbAST) ->
-  args = [].concat(ast.args)
-  if contAST.type() == 'procedure'
-    args.push contAST
-  else
-    args.push makeCallback contAST, cbAST
-  AST.return(AST.funcall(ast.funcall, args))
+cpsTopLevel = (ast) ->
+  body = normalize ast.body 
+  params = [ ast.moduleParam ]
+  cbAST = ast.callbackParam.ref()
+  task = cpsTask AST.task(null, params, body), cbAST, cbAST
+  toplevel = AST.toplevel task.body
+  toplevel.moduleParam = ast.moduleParam 
+  toplevel.callbackParam = ast.callbackParam 
+  toplevel.errorParam = ast.errorParam 
+  toplevel
 
-register AST.get('taskcall'), cpsTaskcall
+register AST.get('toplevel'), cpsTopLevel
 
-cpsTask = (ast, contAST) ->
-  cbAST = AST.param(AST.symbol('_done'))
+cpsTask = (ast, contAST, cbAST) ->
   body = normalize ast.body
-  params = [].concat(ast.params).concat(cbAST)
-  errParam = AST.param(AST.symbol('e'))
+  params = [].concat(ast.params).concat(callbackParam)
   console.log '--cpTask', body
   body = 
     if body.items[0].type() == 'try'
-        _cpsOne(body, cbAST, cbAST.name)
+        _cpsOne(body, cbAST, cbAST)
     else
       AST.try(
-        _cpsOne(body, cbAST, cbAST.name), 
+        _cpsOne(body, cbAST, cbAST), 
         [ 
           AST.catch(
-            errParam, 
+            errorParam, 
             AST.block(
               [
                 AST.return(AST.funcall(
-                  cbAST.name, 
+                  cbAST, 
                   [ 
-                    errParam.name
+                    errorParam.ref()
                   ]))
               ]
             )
@@ -171,6 +191,23 @@ cpsTask = (ast, contAST) ->
   )
   
 register AST.get('task'), cpsTask
+
+cpsBlock = (anf, contAST, cbAST) ->
+  for i in [anf.items.length - 1 ..0] by -1
+    contAST = _cpsOne anf.items[i], contAST, cbAST
+  normalize contAST
+
+register AST.get('block'), cpsBlock
+
+cpsTaskcall = (ast, contAST, cbAST) ->
+  args = [].concat(ast.args)
+  if contAST.type() == 'procedure'
+    args.push contAST
+  else
+    args.push makeCallback contAST, cbAST
+  AST.return(AST.funcall(ast.funcall, args))
+
+register AST.get('taskcall'), cpsTaskcall
 
 combine = (ast, contAST) ->
   if not contAST
@@ -197,6 +234,7 @@ normalize = (ast) ->
     AST.block [ ast ]
 
 makeCallback = (contAST, cbAST, resParam = AST.param('res')) ->
+  console.log '--makeCallback', contAST, cbAST, resParam
   if contAST == cbAST
     contAST
   else
@@ -206,7 +244,7 @@ makeCallback = (contAST, cbAST, resParam = AST.param('res')) ->
         AST.param('err')
         resParam
       ],
-      ASTcond(AST.symbol('err'),
+      AST.if(AST.symbol('err'),
         AST.return(AST.funcall(cbAST, [ AST.symbol('err') ])),
         contAST
       )
@@ -289,11 +327,14 @@ register AST.get('string'), cpsScalar
 register AST.get('binary'), cpsScalar
 register AST.get('member'), cpsScalar
 register AST.get('procedure'), cpsScalar
+register AST.get('ref'), cpsScalar
 register AST.get('proxyval'), cpsScalar
 register AST.get('var'), cpsScalar
 register AST.get('funcall'), cpsScalar
 register AST.get('array'), cpsScalar
 register AST.get('object'), cpsScalar
+register AST.get('unit'), cpsScalar
+register AST.get('import'), cpsScalar
 
 cpsThrow = (ast, contAST, cbAST) ->
   AST.return AST.funcall(cbAST, [ ast.value ])
@@ -337,18 +378,16 @@ cpsTry = (ast, contAST, cbAST) ->
     if ast.catches.length > 0
       ast.catches[0]
     else
-      errParam = AST.param(AST.symbol('e'))
       AST.catch(
-        errParam
+        errorParam
         AST.block([
-          AST.throw(errParam.name)
+          AST.throw(errorParam.name)
         ])
       )
   errorAST = _makeErrorHandler catchExp, ast.finally, cbAST, name
   cbAST = name
   bodyAST = _cpsOne ast.body, contAST, cbAST
   tryBody = combine errorAST, bodyAST 
-  errorParam = AST.param(AST.symbol('e'))
   AST.try(
     tryBody
     [ 
