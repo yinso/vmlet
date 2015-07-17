@@ -1,6 +1,7 @@
 AST = require './ast'
 T = require './transformer'
 tr = require './trace'
+CPS = require './cps'
 
 # when this is called it would be ANF'd.
 atomicTypes = 
@@ -34,7 +35,6 @@ T.register 'return', ($r) ->
   else
     false
 , ($r, $inner) -> 
-  #console.log '-- return.local', arguments
   T.transform AST.return($inner)
 
 T.register 'return', ($r) ->
@@ -79,7 +79,6 @@ T.register 'return', ($r) ->
   T.transform $finally
 
 T.register 'local', ($l) -> 
-  console.log '--local.trans', $l.value
   if not $l.value
     return false
   val = $l.value
@@ -87,11 +86,9 @@ T.register 'local', ($l) ->
 , ($l) -> $l
 
 T.register 'local', ($l) -> 
-  console.log '--local.trans.if', $l.value
   if not $l.value
     return false
   val = $l.value
-  console.log 'local.if', val.type() == 'if', val
   if val.type() == 'if'
     [ val.cond, val.then, val.else ]
 , ($l, $cond, $then, $else) ->
@@ -103,7 +100,6 @@ T.register 'local', ($l) ->
   ]
 
 T.register 'local', ($l) -> 
-  console.log '--local.trans.block', $l.value
   if not $l.value
     return false
   val = $l.value
@@ -121,7 +117,6 @@ T.register 'local', ($l) ->
   AST.block items
 
 T.register 'local', ($l) -> 
-  console.log '--local.trans.try', $l.value
   if not $l.value
     return false
   val = $l.value
@@ -204,7 +199,16 @@ T.register 'task', ($p) ->
   [ $p.name , $p.params, $p.body , $p.returns ]
 , ($p, $name, $params, $body, $returns) -> 
   body = T.transform AST.return($body)
-  AST.task $name, $params, body, $returns
+  CPS.transform AST.task $name, $params, body, $returns
 
+T.register 'toplevel', ($t) ->
+  [ $t.body ]
+, ($t, $body) ->
+  body = T.transform $body 
+  CPS.transform $t.clone(body)
 
-  
+T.register 'module', ($t) ->
+  [ $t.body ]
+, ($t, $body) -> 
+  body = T.transform $body 
+  CPS.transform $t.clone body

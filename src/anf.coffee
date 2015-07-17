@@ -227,7 +227,7 @@ register AST.get('try'), transformTry
 transformImport = (ast, env, block) ->
   for binding in ast.bindings 
     env.define binding.name, binding
-  block.push ast
+  block.push AST.unit()
 
 register AST.get('import'), transformImport
 

@@ -12,6 +12,7 @@ Unit = require './unit'
 util = require './util'
 TR = require './trace'
 UNIQ = require './unique'
+async = require 'async'
 
 esnode = require './esnode'
 escodegen = require 'escodegen'
@@ -78,9 +79,9 @@ class Module
     if not @has key
       throw new Error("Module.unknown_identifier: #{key}")
     @inner[key]
-  
+
 class Toplevel 
-  constructor: (@proc, @module) ->
+  constructor: (@depends, @proc, @module) ->
   eval: (cb) ->
     try 
       @proc @module, cb
@@ -91,6 +92,7 @@ class Toplevel
 # when we define a module we not only want to define 
 class Runtime
   constructor: (@baseEnv = new SymbolTable(), @main = new Module(@baseEnv)) ->
+    @modules = {}
     @parser = parser
     @AST = AST
     # now the biggest challenge starts!
@@ -122,10 +124,10 @@ class Runtime
         res.apply head, args
     else
       res
-  toplevel: (proc, module) ->
-    new Toplevel proc, module
-  module: (proc) ->
-    module = proc()
+  toplevel: (depends, proc, module = @main) ->
+    new Toplevel depends, proc, @main
+  module: (depends, proc) ->
+    @toplevel depends, proc, new Module @baseEnv
   makeSync: (funcMaker) ->
     func = funcMaker @
     func.__vmlet = {sync: true}
@@ -147,31 +149,6 @@ class Runtime
     ast = @parser.parse stmt
     loglet.log '-------- Runtime.parsed =>', ast
     ast
-  import: (filePath, cb) ->
-    # we will deal with external package path once things are loaded... 
-    if @isPackage filePath 
-      # there are a few things to deal with here... 
-      # 1 - things about loading the actual underlying node modules... 
-      try 
-        module = require filePath 
-        
-      catch e 
-        cb e 
-    else
-      try 
-        fs.readFile filePath, 'utf8', (err, data) =>
-          if err 
-            cb err 
-          else
-            try # this isn't really trying to 
-              parsed = AST.module @parse data 
-              ast = @transform ast 
-              compiled = @compile ast 
-              compiled.eval cb
-            catch e 
-              cb e
-      catch e 
-         cb e
   isPackage: (filePath) -> 
     false
   eval: (stmt, cb) ->
@@ -181,42 +158,61 @@ class Runtime
       return cb null, @baseEnv
     try 
       ast = AST.toplevel @parse stmt 
-      ast = @transform ast
-      compiled = @compile ast
-      try 
-        compiled.eval (err, res) =>
-          if err 
-            cb err
-          else if res instanceof Unit
-            cb null
-          else if @isResult(res)
-            cb null, @unbind(res)
-          else
-            cb err, res
-      catch e
-        cb e
+      @evalParsed ast, cb
     catch e
       cb e
-  extractImports: (ast) ->
-    # imports should be @ at the top level expressions...
-    switch ast.type()
-      when 'toplevel', 'module'
-        @extractImports ast.body
-      when 'block'
-        results = []
-        for item in ast.items 
-          if item.type() == 'import'
-            results.push item 
-        results
-      when 'import'
-        [ ast ]
+  evalParsed: (ast, cb) ->
+    @loadImports ast, (err) =>
+      console.log '--evalParsed.after.import', ast, err
+      if err 
+        cb err 
       else
-        throw new Error("runtime.imports.invalid_expression: #{ast}")
+        try 
+          ast = @transform ast
+          compiled = @compile ast
+          compiled.eval (err, res) ->
+            console.log '--evalParsed.compiled.result', err, res
+            if err 
+              cb err
+            else if res instanceof Unit
+              cb null
+            else
+              cb err, res
+        catch e
+          cb e
+  loadImports: (ast, cb) ->
+    try 
+      async.eachSeries ast.importSpecs(), (spec, next) => 
+        @loadImport spec, next 
+      , cb
+    catch e 
+      cb e
+  loadImport: (spec, cb) ->
+    console.log '-- runtime.loadImport', spec
+    try 
+      fs.readFile spec, 'utf8', (err, data) =>
+        console.log '-- runtime.loadImport.loaded', err, data
+        if err 
+          cb err 
+        else
+          try # this isn't really trying to 
+            parsed = AST.module @parse data 
+            console.log '-- runtime.loadImport.parsed', parsed
+            @evalParsed parsed, (err, module) =>
+              console.log '-- runtime.loadImport.result', err, module
+              if err 
+                cb err
+              else
+                @modules[spec] = module 
+                cb null
+          catch e 
+            cb e
+    catch e 
+      cb e
   transform: (ast, module = @main) ->
     ast = RESOLVER.transform ast, module.env
     loglet.log '-------- Runtime.transformed =>', ast, module.env
-    ast = CPS.transform ast
-    loglet.log '-------- Runtime.cpsed =>', ast
+    #ast = CPS.transform ast
     ast
   get: (key) ->
     @baseEnv.get key

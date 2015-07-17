@@ -5,7 +5,7 @@ errorlet = require 'errorlet'
 AST = require './ast'
 SymbolTable = require './symboltable'
 tr = require './trace'
-Transformer = require './transformer'
+T = require './transformer'
 ANF = require './anf'
 
 _transTypes = {}
@@ -24,14 +24,14 @@ get = (ast) ->
 
 transform = (ast, env) ->
   switch ast.type()
-    when 'toplevel'
+    when 'toplevel', 'module'
       resolved = _transform ast.body, env
       anf = ANF.transform resolved, env
-      AST.toplevel Transformer.transform AST.return(anf)
+      T.transform ast.clone(AST.return(anf))
     else
       resolved = _transform ast, env
       anf = ANF.transform resolved, env
-      Transformer.transform AST.return(anf)
+      T.transform AST.return(anf)
 
 _transform = (ast, env) ->
   resolver = get(ast)
@@ -86,14 +86,14 @@ transformDefine = (ast, env) ->
   res = _transform ast.value, env
   ref.value = res # update the value.
   #console.log '-- resolver.define', ref, env.level(), env
-  if env.level() <= 2 # this is arbitrary decided for now... base + toplevel block ?
+  if env.level() <= 1 # this is arbitrary decided for now... base + toplevel block ?
     ref.isDefine = true
   ref.define()
 
 register AST.get('define'), transformDefine
 
 transformIdentifier = (ast, env) ->
-  console.log 'RESOLVER.identifier', ast, env
+  #console.log 'RESOLVER.identifier', ast, env
   if env.has ast
     env.get ast
   else
@@ -162,7 +162,7 @@ makeProc = (type) ->
         newEnv.define ast.name , decl 
     body = _transform ast.body, newEnv
     decl.body = body
-    Transformer.transform decl
+    T.transform decl
 
 register AST.get('procedure'), makeProc('procedure')
 register AST.get('task'), makeProc('task')

@@ -24,7 +24,8 @@
     "errorlet": ">=1.0.0",
     "lie": "=2.8.1",
     "escodegen": "=1.6.1",
-    "repl.history": "=0.1.3"
+    "repl.history": "=0.1.3",
+    "async": "=1.3.0"
   },
   "devDependencies": {
     "testlet": ">= 0.2.0",

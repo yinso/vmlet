@@ -129,13 +129,16 @@ errorParam = AST.param(AST.symbol('e'))
 cbAST = callbackParam.ref()
 
 cps = (ast) ->
-  switch ast.type()
-    when 'task'
-      cpsTask ast
-    when 'toplevel'
-      cpsTopLevel ast
-    else # this should error!
-      throw new Error("CPS:unsupported_toplevel_type: #{ast}")
+  res = 
+    switch ast.type()
+      when 'task'
+        cpsTask ast
+      when 'toplevel', 'module'
+        cpsTopLevel ast
+      else # this should error!
+        throw new Error("CPS:unsupported_toplevel_type: #{ast}")
+  console.log '-------- Runtime.cpsed =>', ast
+  res
 
 _cpsOne = (item, contAST, cbAST) ->
   cpser = get item
@@ -146,11 +149,7 @@ cpsTopLevel = (ast) ->
   params = [ ast.moduleParam ]
   cbAST = ast.callbackParam.ref()
   task = cpsTask AST.task(null, params, body), cbAST, cbAST
-  toplevel = AST.toplevel task.body
-  toplevel.moduleParam = ast.moduleParam 
-  toplevel.callbackParam = ast.callbackParam 
-  toplevel.errorParam = ast.errorParam 
-  toplevel
+  ast.clone task.body
 
 register AST.get('toplevel'), cpsTopLevel
 
