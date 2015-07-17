@@ -83,8 +83,9 @@ class Module
 class Toplevel 
   constructor: (@depends, @proc, @module) ->
   eval: (cb) ->
+    args = [ @module ].concat(@depends).concat [cb]
     try 
-      @proc @module, cb
+      @proc.apply @, args
     catch e 
       cb e
 
@@ -125,9 +126,14 @@ class Runtime
     else
       res
   toplevel: (depends, proc, module = @main) ->
-    new Toplevel depends, proc, @main
-  module: (depends, proc) ->
-    @toplevel depends, proc, new Module @baseEnv
+    modules = 
+      for dep in depends 
+        if not @modules.hasOwnProperty(dep)
+          throw new Error("runtime:unknown_module: #{spec}")
+        @modules[dep]
+    new Toplevel modules, proc, @main
+  module: (id , depends, proc) ->
+    @toplevel depends, proc, new Module id , @baseEnv
   makeSync: (funcMaker) ->
     func = funcMaker @
     func.__vmlet = {sync: true}
@@ -196,7 +202,7 @@ class Runtime
           cb err 
         else
           try # this isn't really trying to 
-            parsed = AST.module @parse data 
+            parsed = AST.module AST.string(spec), @parse data 
             console.log '-- runtime.loadImport.parsed', parsed
             @evalParsed parsed, (err, module) =>
               console.log '-- runtime.loadImport.result', err, module

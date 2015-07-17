@@ -484,7 +484,7 @@ AST.register class TASK extends AST
 
 AST.register class TOPLEVEL extends AST 
   @type: 'toplevel'
-  constructor: (body) ->
+  constructor: (body = AST.unit()) ->
     @moduleParam = AST.param(AST.symbol('_module'))
     @callbackParam = AST.param(AST.symbol('_done'))
     @errorParam = AST.param AST.symbol('e')
@@ -503,7 +503,7 @@ AST.register class TOPLEVEL extends AST
       else
         results
   clone: (body = @body) ->
-    toplevel = new @constructor AST.unit()
+    toplevel = new @constructor()
     toplevel.body = body
     toplevel.moduleParam = @moduleParam
     toplevel.callbackParam = @callbackParam
@@ -543,7 +543,7 @@ AST.register class TOPLEVEL extends AST
       [ 
         esnode.array(imp.specESNode() for imp in @imports)
         esnode.function null, 
-          [ @moduleParam.toESNode() ].concat(imp.idESNode() for imp in []).concat([ @callbackParam.toESNode() ]), 
+          [ @moduleParam.toESNode() ].concat(imp.idESNode() for imp in @imports).concat([ @callbackParam.toESNode() ]), 
           @body.toESNode()
       ]
   selfESNode: () ->
@@ -551,6 +551,12 @@ AST.register class TOPLEVEL extends AST
 
 AST.register class MODULE extends TOPLEVEL
   @type: 'module'
+  constructor: (@spec = AST.string('/'), body = AST.unit()) ->
+    super body
+    @id = @normalizeSpec @spec
+  normalizeSpec: (spec) ->
+    # spec is going to be a string...
+    AST.param AST.symbol spec.value.replace /[\.\/\\]/g, '_' 
   normalizeBody: (body) ->
     body = super body
     switch body.type()
@@ -559,18 +565,21 @@ AST.register class MODULE extends TOPLEVEL
         body
       else
         AST.block [ body , @moduleParam.ref() ]
+  clone: (body = @body) -> 
+    module = super body
+    module.spec = @spec
+    module.id = @normalizeSpec @spec
+    module
   toString: () ->
     "{MODULE #{@body}}"
   toESNode: () ->
     # _rt.module(id, function(module, deps...) { })
     esnode.funcall esnode.member(esnode.identifier('_rt'), esnode.identifier('module')),
       [
+        @spec.toESNode()
         esnode.array(imp.specESNode() for imp in @imports)
         esnode.function null, 
-          [
-            @moduleParam.toESNode()
-            @callbackParam.toESNode()
-          ], 
+          [ @moduleParam.toESNode() ].concat(imp.idESNode() for imp in @imports).concat([@callbackParam.toESNode()])
           @body.toESNode()
       ]
 
@@ -735,9 +744,10 @@ AST.register class IMPORT extends AST
   constructor: (@spec, @bindings = []) ->
     # the spec ought to have a way to be translated for mapping...!
     @idParam = @normalizeSpec @spec
+    console.log '-- import.idParam', @idParam
   normalizeSpec: () ->
     # spec is going to be a string...
-    AST.param AST.symbol @spec.value.replace /\.\/\\/g, '_' 
+    AST.param AST.symbol @spec.value.replace(/[\.\/\\]/g, '_') 
   toString: () ->
     "{IMPORT #{@spec}}"
   specESNode: () ->
