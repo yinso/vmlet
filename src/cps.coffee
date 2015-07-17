@@ -334,6 +334,7 @@ register AST.get('array'), cpsScalar
 register AST.get('object'), cpsScalar
 register AST.get('unit'), cpsScalar
 register AST.get('import'), cpsScalar
+register AST.get('export'), cpsScalar
 
 cpsThrow = (ast, contAST, cbAST) ->
   AST.return AST.funcall(cbAST, [ ast.value ])

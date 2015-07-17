@@ -64,7 +64,10 @@ class Module
     @inner[key] = val
     #@env.define AST.symbol(key), val # the value needs to be just a ref I think...
     val
-  export: (key, as = key) ->
+  export: (key, as = null) ->
+    if not as 
+      as = key
+    @exports[as] = @get(key)
   import: (keys = []) ->
     if keys.length > 0 
       res = []
@@ -217,7 +220,7 @@ class Runtime
       cb e
   transform: (ast, module = @main) ->
     ast = RESOLVER.transform ast, module.env
-    loglet.log '-------- Runtime.transformed =>', ast, module.env
+    #loglet.log '-------- Runtime.transformed =>', ast, module.env
     #ast = CPS.transform ast
     ast
   get: (key) ->

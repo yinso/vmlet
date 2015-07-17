@@ -41,11 +41,13 @@ Keywords
 / '<-'
 / '+'
 / 'import'
+/ 'export'
 
 TopLevelExpression 
 = TaskExpression
 / Expression
 / ImportExp
+/ ExportExp
 
 Expression
 = exp:IfExp _ { return exp; }
@@ -321,11 +323,16 @@ TaskcallExp
 
 /************************************************************************
 ImportExp
-
-This is done as a Taskcall... 
 ************************************************************************/
 ImportExp
 = 'import' _ spec:StringExp _ { return helper.import(spec); }
+
+/************************************************************************
+ExportExp
+************************************************************************/
+ExportExp
+= 'export' _ spec:SymbolExp _ { return helper.export([ helper.binding(spec) ]); }
+
 
 /************************************************************************
 MemberExp

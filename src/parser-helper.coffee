@@ -106,6 +106,12 @@ tryAST = (body, catches, fin) ->
 import_ = (module, defs = []) ->
   AST.import module, defs
 
+export_ = (spec) ->
+  AST.export spec
+
+binding = (spec, as = null) ->
+  AST.binding spec, as
+
 module.exports = 
   number: number
   bool: bool
@@ -130,5 +136,7 @@ module.exports =
   catch: catchAST
   finally: finallyAST
   import: import_
+  export: export_
+  binding: binding
 
 

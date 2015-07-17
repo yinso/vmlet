@@ -333,6 +333,8 @@ AST.register class REF extends AST
       AST.local @, @value
   assign: () ->
     AST.assign @, @value
+  export: (@as = null ) ->
+    AST.export [ AST.binding(@, @as) ]
   toESNode: () ->
     if @value.type() == 'proxyval'
       @value.toESNode()
@@ -482,106 +484,6 @@ AST.register class TASK extends AST
     name = if @name then esnode.identifier(@name) else esnode.null_()
     @baseSelfESNode name, params, @body.selfESNode(), @returns?.selfESNode() or esnode.literal(@returns)
 
-AST.register class TOPLEVEL extends AST 
-  @type: 'toplevel'
-  constructor: (body = AST.unit()) ->
-    @moduleParam = AST.param(AST.symbol('_module'))
-    @callbackParam = AST.param(AST.symbol('_done'))
-    @errorParam = AST.param AST.symbol('e')
-    @body = @normalizeBody body
-    @imports = @extractImports @body
-  extractImports: (ast, results = []) ->
-    # imports should be @ at the top level expressions...
-    switch ast.type()
-      when 'block'
-        for item in ast.items 
-          @extractImports item, results
-        results
-      when 'import'
-        results.push ast
-        results
-      else
-        results
-  clone: (body = @body) ->
-    toplevel = new @constructor()
-    toplevel.body = body
-    toplevel.moduleParam = @moduleParam
-    toplevel.callbackParam = @callbackParam
-    toplevel.errorParam = @errorParam
-    toplevel.imports = @imports 
-    toplevel
-  importSpecs: () ->
-    imp.importSpec() for imp in @imports
-  normalizeBlock: (body) ->
-    if body.items.length == 1 and body.items[0].type() == 'define'
-      body.push AST.unit()
-    body
-  normalizeBody: (body) ->
-    switch body.type()
-      when 'block'
-        @normalizeBlock body
-      when 'define'
-        @normalizeDefine body
-      else
-        @normalizeOther body
-  normalizeDefine: (body) ->
-    AST.block [ 
-        body 
-        AST.unit()
-      ]
-  normalizeOther: (body) ->
-    AST.block [
-        body 
-      ]
-  _equals: (v) ->
-    @body.equals v.body 
-  isAsync: () -> true 
-  toString: () ->
-    "{TOPLEVEL #{@body}}"
-  toESNode: () ->
-    esnode.funcall esnode.member(esnode.identifier('_rt'), esnode.identifier('toplevel')),
-      [ 
-        esnode.array(imp.specESNode() for imp in @imports)
-        esnode.function null, 
-          [ @moduleParam.toESNode() ].concat(imp.idESNode() for imp in @imports).concat([ @callbackParam.toESNode() ]), 
-          @body.toESNode()
-      ]
-  selfESNode: () ->
-    @baseSelfESNode @body.selfESNode()
-
-AST.register class MODULE extends TOPLEVEL
-  @type: 'module'
-  constructor: (@spec = AST.string('/'), body = AST.unit()) ->
-    super body
-    @id = @normalizeSpec @spec
-  normalizeSpec: (spec) ->
-    # spec is going to be a string...
-    AST.param AST.symbol spec.value.replace /[\.\/\\]/g, '_' 
-  normalizeBody: (body) ->
-    body = super body
-    switch body.type()
-      when 'block'
-        body.items.push @moduleParam.ref()
-        body
-      else
-        AST.block [ body , @moduleParam.ref() ]
-  clone: (body = @body) -> 
-    module = super body
-    module.spec = @spec
-    module.id = @normalizeSpec @spec
-    module
-  toString: () ->
-    "{MODULE #{@body}}"
-  toESNode: () ->
-    # _rt.module(id, function(module, deps...) { })
-    esnode.funcall esnode.member(esnode.identifier('_rt'), esnode.identifier('module')),
-      [
-        @spec.toESNode()
-        esnode.array(imp.specESNode() for imp in @imports)
-        esnode.function null, 
-          [ @moduleParam.toESNode() ].concat(imp.idESNode() for imp in @imports).concat([@callbackParam.toESNode()])
-          @body.toESNode()
-      ]
 
 AST.register class IF extends AST
   @type: 'if'
@@ -739,12 +641,123 @@ AST.register class TRY extends AST
     final = @finally?.selfESNode() or esnode.literal(@finally)
     @baseSelfESNode @body.selfESNode(), catches, final
 
+AST.register class TOPLEVEL extends AST 
+  @type: 'toplevel'
+  constructor: (body = AST.unit()) ->
+    @moduleParam = AST.param(AST.symbol('_module'))
+    @callbackParam = AST.param(AST.symbol('_done'))
+    @errorParam = AST.param AST.symbol('e')
+    @body = @normalizeBody body
+    @imports = @extractImports @body
+  extractImports: (ast, results = []) ->
+    # imports should be @ at the top level expressions...
+    switch ast.type()
+      when 'block'
+        for item in ast.items 
+          @extractImports item, results
+        results
+      when 'import'
+        results.push ast
+        results
+      else
+        results
+  clone: (body = @body) ->
+    toplevel = new @constructor()
+    toplevel.body = body
+    toplevel.moduleParam = @moduleParam
+    toplevel.callbackParam = @callbackParam
+    toplevel.errorParam = @errorParam
+    toplevel.imports = @imports 
+    toplevel
+  importSpecs: () ->
+    imp.importSpec() for imp in @imports
+  normalizeBlock: (body) ->
+    if body.items.length == 1 and body.items[0].type() == 'define'
+      body.push AST.unit()
+    body
+  normalizeBody: (body) ->
+    switch body.type()
+      when 'block'
+        @normalizeBlock body
+      when 'define'
+        @normalizeDefine body
+      else
+        @normalizeOther body
+  normalizeDefine: (body) ->
+    AST.block [ 
+        body 
+        AST.unit()
+      ]
+  normalizeOther: (body) ->
+    AST.block [
+        body 
+      ]
+  _equals: (v) ->
+    @body.equals v.body 
+  isAsync: () -> true 
+  toString: () ->
+    "{TOPLEVEL #{@body}}"
+  toESNode: () ->
+    esnode.funcall esnode.member(esnode.identifier('_rt'), esnode.identifier('toplevel')),
+      [ 
+        esnode.array(imp.specESNode() for imp in @imports)
+        esnode.function null, 
+          [ @moduleParam.toESNode() ].concat(imp.idESNode() for imp in @imports).concat([ @callbackParam.toESNode() ]), 
+          @body.toESNode()
+      ]
+  selfESNode: () ->
+    @baseSelfESNode @body.selfESNode()
+
+AST.register class MODULE extends TOPLEVEL
+  @type: 'module'
+  constructor: (@spec = AST.string('/'), body = AST.unit()) ->
+    super body
+    @id = @normalizeSpec @spec
+  normalizeSpec: (spec) ->
+    # spec is going to be a string...
+    AST.param AST.symbol spec.value.replace /[\.\/\\]/g, '_' 
+  normalizeBody: (body) ->
+    body = super body
+    switch body.type()
+      when 'block'
+        body.items.push @moduleParam.ref()
+        body
+      else
+        AST.block [ body , @moduleParam.ref() ]
+  clone: (body = @body) -> 
+    module = super body
+    module.spec = @spec
+    module.id = @normalizeSpec @spec
+    module
+  toString: () ->
+    "{MODULE #{@body}}"
+  toESNode: () ->
+    # _rt.module(id, function(module, deps...) { })
+    esnode.funcall esnode.member(esnode.identifier('_rt'), esnode.identifier('module')),
+      [
+        @spec.toESNode()
+        esnode.array(imp.specESNode() for imp in @imports)
+        esnode.function null, 
+          [ @moduleParam.toESNode() ].concat(imp.idESNode() for imp in @imports).concat([@callbackParam.toESNode()])
+          @body.toESNode()
+      ]
+
+AST.register class BINDING extends AST
+  @type: 'binding'
+  constructor: (@spec, @as = null) ->
+  toString: () ->
+    if @as 
+      "{AS #{@spec} #{@as}}"
+    else
+      "{#{@spec}}"
+  toESNode: () ->
+    
+
 AST.register class IMPORT extends AST
   @type: 'import'
   constructor: (@spec, @bindings = []) ->
     # the spec ought to have a way to be translated for mapping...!
     @idParam = @normalizeSpec @spec
-    console.log '-- import.idParam', @idParam
   normalizeSpec: () ->
     # spec is going to be a string...
     AST.param AST.symbol @spec.value.replace(/[\.\/\\]/g, '_') 
@@ -760,6 +773,22 @@ AST.register class IMPORT extends AST
     @spec.value
   bindingESNode: (binding) ->
     [ binding.toESNode() , esnode.member(@idParam.toESNode(), esnode.literal(binding.value)) ]
+
+AST.register class EXPORT extends AST 
+  @type: 'export'
+  constructor: (@bindings = []) ->
+  toString: () ->
+    "{EXPORT #{@bindings}}"
+  isAsync: () -> false
+  toESNode: () ->
+    bindings = 
+      for binding in @bindings 
+        esnode.funcall esnode.member(esnode.identifier('_module'), esnode.identifier('export')), 
+          [ 
+            esnode.literal(binding.spec.value)
+            #binding.spec.toESNode()
+          ]
+    esnode.block bindings
 
 ###
 

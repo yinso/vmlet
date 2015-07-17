@@ -38,7 +38,7 @@ normalizeBlock = (ast) ->
   for item, i in ast.items 
     if i < ast.items.length - 1 
       switch item.type()
-        when 'local', 'define'
+        when 'local', 'define', 'export'
           items.push item
     else
       items.push switch item.type()
@@ -230,6 +230,15 @@ transformImport = (ast, env, block) ->
   block.push AST.unit()
 
 register AST.get('import'), transformImport
+
+transformExport = (ast, env, block) ->
+  for binding in ast.bindings 
+    ref = env.get binding.spec 
+    block.push AST.export [ binding ]
+    #block.push ref.export()
+  AST.unit()
+
+register AST.get('export'), transformExport
 
 module.exports = 
   register: register

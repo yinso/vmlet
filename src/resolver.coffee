@@ -27,6 +27,7 @@ transform = (ast, env) ->
     when 'toplevel', 'module'
       resolved = _transform ast.body, env
       anf = ANF.transform resolved, env
+      console.log 'RESOLVER.anffed', anf
       T.transform ast.clone(AST.return(anf))
     else
       resolved = _transform ast, env
@@ -207,6 +208,14 @@ transformImport = (ast, env) ->
   ast
 
 register AST.get('import'), transformImport 
+
+transformExport = (ast, env) ->
+  for binding in ast.bindings 
+    if not env.has binding.spec 
+      throw new Error("export:unknown_identifier: #{binding.binding}")
+  ast
+
+register AST.get('export'), transformExport
 
 module.exports =
   transform: transform

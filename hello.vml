@@ -8,3 +8,5 @@ define func fib(n) {
 }
 
 console.log('hello world')
+
+export fib
