@@ -203,7 +203,7 @@ register AST.get('try'), transformTry
 transformImport = (ast, env) ->
   # when we are transforming import, we are introducing bindings.
   for binding in ast.bindings 
-    env.define binding.spec, ast.proxy(binding)
+    env.define binding.as, ast.proxy(binding)
   ast
 
 register AST.get('import'), transformImport 

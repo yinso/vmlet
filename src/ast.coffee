@@ -773,7 +773,7 @@ AST.register class IMPORT extends AST
   define: (binding) ->
     AST.define binding.as, AST.funcall(AST.member(@idParam.ref(), AST.symbol('get')), [AST.string(binding.spec.value)])
   proxy: (binding) ->
-    AST.proxyval binding.spec, AST.funcall(AST.member(AST.symbol('_module'), AST.symbol('get')), [ AST.string(binding.spec.value)])
+    AST.proxyval binding.as, AST.funcall(AST.member(AST.symbol('_module'), AST.symbol('get')), [ AST.string(binding.as.value)])
   idESNode: () ->
     @idParam.toESNode()
   toESNode: () ->
@@ -782,7 +782,6 @@ AST.register class IMPORT extends AST
     @spec.value
   bindingESNode: (binding) ->
     res = [ binding.as.toESNode() , esnode.member(@idParam.toESNode(), binding.spec.toESNode()) ]
-    console.log '--import.bindingESNode', res 
     res
 
 AST.register class EXPORT extends AST 
