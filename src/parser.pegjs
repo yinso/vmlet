@@ -42,6 +42,7 @@ Keywords
 / '+'
 / 'import'
 / 'export'
+/ 'from'
 
 TopLevelExpression 
 = TaskExpression
@@ -325,13 +326,21 @@ TaskcallExp
 ImportExp
 ************************************************************************/
 ImportExp
-= 'import' _ spec:StringExp _ { return helper.import(spec); }
+= 'import' _ bindings:BindingExpList _ 'from' _ spec:StringExp _ { return helper.import(spec, bindings); }
+/ 'import' _ spec:StringExp _ { return helper.import(spec); }
+
+BindingExpList
+= bindings:BindingExp+ { return bindings; }
+
+BindingExp
+= sym:SymbolExp _ 'as' _ as:SymbolExp _ ','? _ { return helper.binding(sym, as); }
+/ sym:SymbolExp _ ','? _ { return helper.binding(sym); }
 
 /************************************************************************
 ExportExp
 ************************************************************************/
 ExportExp
-= 'export' _ spec:SymbolExp _ { return helper.export([ helper.binding(spec) ]); }
+= 'export' _ bindings:BindingExpList _ { return helper.export(bindings); }
 
 
 /************************************************************************

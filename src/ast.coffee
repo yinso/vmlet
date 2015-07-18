@@ -58,7 +58,7 @@ AST.register class SYMBOL extends AST
   _equals: (v) ->
     @value == v.value and @suffix == v.suffix
   nested: () ->
-    new @ @value, if @suffix == undefined then 1 else @suffix + 1 
+    new @constructor @value, if @suffix == undefined then 1 else @suffix + 1 
   toString: () ->
     if @suffix
       "{SYM #{@value};#{@suffix}}"
@@ -745,6 +745,8 @@ AST.register class MODULE extends TOPLEVEL
 AST.register class BINDING extends AST
   @type: 'binding'
   constructor: (@spec, @as = null) ->
+    if not @as
+      @as = @spec
   toString: () ->
     if @as 
       "{AS #{@spec} #{@as}}"
@@ -762,17 +764,26 @@ AST.register class IMPORT extends AST
     # spec is going to be a string...
     AST.param AST.symbol @spec.value.replace(/[\.\/\\]/g, '_') 
   toString: () ->
-    "{IMPORT #{@spec}}"
+    "{IMPORT #{@spec}} #{@bindings}"
   specESNode: () ->
     @spec.toESNode()
+  defines: () ->
+    for binding in @bindings 
+      @define binding
+  define: (binding) ->
+    AST.define binding.as, AST.funcall(AST.member(@idParam.ref(), AST.symbol('get')), [AST.string(binding.spec.value)])
+  proxy: (binding) ->
+    AST.proxyval binding.spec, AST.funcall(AST.member(AST.symbol('_module'), AST.symbol('get')), [ AST.string(binding.spec.value)])
   idESNode: () ->
     @idParam.toESNode()
   toESNode: () ->
-    esnode.declare 'var', (@bindingESNode(binding) for binding in @bindings)
+    esnode.declare 'var', (@bindingESNode(binding) for binding in @bindings)...
   importSpec: () ->
     @spec.value
   bindingESNode: (binding) ->
-    [ binding.toESNode() , esnode.member(@idParam.toESNode(), esnode.literal(binding.value)) ]
+    res = [ binding.as.toESNode() , esnode.member(@idParam.toESNode(), binding.spec.toESNode()) ]
+    console.log '--import.bindingESNode', res 
+    res
 
 AST.register class EXPORT extends AST 
   @type: 'export'

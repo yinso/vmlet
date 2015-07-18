@@ -1,0 +1,11 @@
+#!/usr/bin/env coffee
+
+util = require './src/util'
+SymbolTable = require './src/symboltable'
+parser = require './src/parser'
+
+#env = new SymbolTable()
+parsed = parser.parse '1 + 2 * 3'
+console.log util.stringify([ parsed , parsed, parsed ])
+
+

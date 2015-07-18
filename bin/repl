@@ -31,6 +31,8 @@ else
       try
         if cmd.match emptyLineRE # empty line, return value to supress error
           {state: 'ok', parsed: undefined}
+        else if cmd.indexOf(':') == 0
+          {state: 'ok', parsed: cmd}
         else
           {state: 'ok', parsed: vm.parse(cmd)}
       catch e

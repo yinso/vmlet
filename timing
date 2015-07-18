@@ -1,4 +1,0 @@
-#!/usr/bin/env node --prof
-
-require('coffee-script/register')
-require('./profileme')
