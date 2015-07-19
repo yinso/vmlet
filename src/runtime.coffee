@@ -67,10 +67,10 @@ class Module
   define: (key, val) ->
     @inner[key] = val
     val
-  export: (key, as = null) ->
-    if not as 
-      as = key
-    @exports[as] = @get(key)
+  export: (obj) ->
+    for key, val of obj
+      if obj.hasOwnProperty(key)
+        @exports[key] = val
   import: (keys = []) ->
     if keys.length > 0 
       res = []
@@ -166,6 +166,7 @@ class Runtime
     ast
   compile: (ast) ->
     compiled = compiler.compile ast
+    console.log '--Runtime.compile', compiled
     vm.runInContext compiled, @context
   isPackage: (filePath) -> 
     false

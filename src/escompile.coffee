@@ -242,13 +242,10 @@ _import = (ast) ->
 register AST.get('import'), _import  
 
 _export = (ast) ->
-  bindings = 
-    for binding in ast.bindings 
-      esnode.funcall esnode.member(esnode.identifier('_module'), esnode.identifier('export')), 
-        [ 
-          esnode.literal(binding.spec.value)
-        ]
-  esnode.block bindings
+  esnode.funcall esnode.member(esnode.identifier('_module'), esnode.identifier('export')), 
+    [ 
+      esnode.object ([binding.as.value, _compile(binding.spec)] for binding in ast.bindings)
+    ]
 
 register AST.get('export'), _export
 
