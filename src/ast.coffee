@@ -1,6 +1,5 @@
 loglet = require 'loglet'
 errorlet = require 'errorlet'
-esnode = require './esnode'
 TR = require './trace'
 
 _hashCode = (str) ->
@@ -43,14 +42,8 @@ class AST
     @toString()
   toString: () ->
     "{#{@constructor.name} #{@value}}"
-  toESNode: () ->
-    {type: 'Node'}
   canReduce: () ->
     false
-  baseSelfESNode: (args...) ->
-    esnode.funcall(esnode.member(esnode.member(esnode.identifier('_rt'), esnode.identifier('AST')), esnode.identifier(@constructor.type)), args)
-  selfESNode: () ->
-    @baseSelfESNode (if @value instanceof AST then @value.selfESNode() else esnode.literal(@value))
 
 AST.register class SYMBOL extends AST
   @type: 'symbol'
@@ -64,38 +57,23 @@ AST.register class SYMBOL extends AST
       "{SYM #{@value};#{@suffix}}"
     else
       "{SYM #{@value}}"
-  toESNode: () ->
-    esnode.identifier @value
 
 AST.register class STRING extends AST
   @type: 'string'
-  toESNode: () ->
-    esnode.literal @value
     
 AST.register class BOOL extends AST
   @type: 'bool'
   @TRUE = new BOOL(true)
   @FALSE = new BOOL(false)
-  toESNode: () ->
-    esnode.literal @value
 
 AST.register class NULL extends AST
   @type: 'null'
   @NULL = new NULL(true)
   toString: () ->
     "{NULL}"
-  toESNode: () ->
-    esnode.null_()
-  selfESNode: () -> 
-    @baseSelfESNode()
 
 AST.register class NUMBER extends AST
   @type: 'number'
-  toESNode: () ->
-    if @value < 0 
-      esnode.unary '-', esnode.literal -@value
-    else
-      esnode.literal @value
 
 AST.register class MEMBER extends AST
   constructor: (@head, @key) ->
@@ -104,19 +82,8 @@ AST.register class MEMBER extends AST
     @head.equals(v.head) and @key == v.key
   toString: () ->
     "{MEMBER #{@head} #{@key}}"
-  toESNode: () ->
-    head = @head.toESNode()
-    key = 
-      if @key.type() == 'symbol'
-        esnode.literal(@key.value)
-      else
-        @key.toESNode()
-    esnode.funcall esnode.member(esnode.identifier('_rt'), esnode.identifier('member')), [ head , key ]
-    #esnode.member @head.toESNode(), @key.toESNode()
   canReduce: () ->
     @head.canReduce()
-  selfESNode: () ->
-    @baseSelfESNode @head.selfESNode(), @key.selfESNode()
 
 AST.register class UNIT extends AST
   @type: 'unit'
@@ -124,8 +91,6 @@ AST.register class UNIT extends AST
   _equals: (v) -> true
   toString: () ->
     "{UNIT}"
-  toESNode: () ->
-    esnode.undefined_()
 
 AST.register class OBJECT extends AST
   @type: 'object'
@@ -138,15 +103,11 @@ AST.register class OBJECT extends AST
       if not o1.equals(o2)
         return false
     true
-  toESNode: () ->
-    esnode.object ([key, val.toESNode()] for [key, val] in @value)
   canReduce: () ->
     for [ key, val ] in @value
       if val.canReduce()
         return true
     return false
-  selfESNode: () ->
-    @baseSelfESNode esnode.array(esnode.array(esnode.literal(key), val.selfESNode()) for [key, val] in @value)
 
 AST.register class ARRAY extends AST
   @type: 'array'
@@ -159,50 +120,11 @@ AST.register class ARRAY extends AST
       if not a1.equals(a2)
         return false
     true
-  toESNode: () ->
-    esnode.array (item.toESNode() for item in @value)
   canReduce: () ->
     for val in @value
       if val.canReduce()
         return true
     return false
-  selfESNode: () ->
-    @baseSelfESNode esnode.array(item.selfESNode() for item in @value)
-###
-AST.register class LIST extends AST
-  @type: 'list'
-  _equals: (v) -> 
-    if v.value == @value.length
-      for val, i in v.value
-          res = @value[i].equals(val)
-          if res
-            continue
-          else
-            return false
-      true
-    else
-      false  
-
-AST.register class QUOTED extends AST
-  @type: 'quoted'
-  _equals: (v) ->
-    @value.equals(v.value)
-
-AST.register class QUASI extends AST
-  @type: 'quasi'
-  _equals: (v) ->
-    @value.equals(v.value)
-
-AST.register class UNQUOTE extends AST
-  @type: 'unquote'
-  _equals: (v) ->
-    @value.equals(v.value)
-
-AST.register class UNQUOTESPLICING extends AST
-  @type: 'unquotesplicing'
-  _equals: (v) ->
-    @value.equals(v.value)
-###
 
 AST.register class BLOCK extends AST
   constructor: (@items = []) ->
@@ -233,11 +155,7 @@ AST.register class BLOCK extends AST
   push: (item) ->
     @items.push item # this line causes range error???
     item
-  toESNode: () ->
-    esnode.block (item.toESNode() for item in @items)
   canReduce: () -> true # this is actually not necessarily true...!!!
-  selfESNode: () ->
-    @baseSelfESNode esnode.array(item.selfESNode() for item in @items)
 
 AST.register class ASSIGN extends AST
   @type: 'assign'
@@ -248,11 +166,7 @@ AST.register class ASSIGN extends AST
     @value.isAsync()
   toString: () ->
     "{ASSIGN #{@name} #{@value}}"
-  toESNode: () ->
-    esnode.assign @name.toESNode(), @value.toESNode() 
   canReduce: () -> true # this is actually not necessarily true...!!!
-  selfESNode: () ->
-    @baseSelfESNode @name.selfESNode(), @value.selfESNode()
 
 AST.register class DEFINE extends AST
   @type: 'define'
@@ -263,30 +177,7 @@ AST.register class DEFINE extends AST
     @value.isAsync()
   toString: () ->
     "{DEFINE #{@name} #{@value}}"
-  toESNode: () ->
-    name = 
-      switch @name.type()
-        when 'ref'
-          esnode.literal @name.name.value
-        when 'symbol'
-          esnode.literal @name.value
-        else
-          throw new Error("AST.define.toESNode:unknown_name_type: #{@name}")
-    value = 
-      esnode.funcall esnode.member(esnode.identifier('_module'), esnode.identifier('define')),
-        [ name , @value.toESNode() ]
-    id = 
-      switch @name.type()
-        when 'ref'
-          @name.normalName().toESNode()
-        when 'symbol'
-          @name.toESNode()
-        else
-          throw new Error("AST.define.toESNode:unknown_name_type: #{@name}")
-    esnode.declare 'var', [ id, value ]
   canReduce: () -> true # this is actually not necessarily true...!!!
-  selfESNode: () ->
-    @baseSelfESNode @name.selfESNode(), @value.selfESNode()
 
 AST.register class LOCAL extends AST 
   @type: 'local'
@@ -297,21 +188,11 @@ AST.register class LOCAL extends AST
     @value?.isAsync() or false
   toString: () ->
     "{LOCAL #{@name} #{@value}}"
-  toESNode: () ->
-    if not @value
-      esnode.declare 'var', [ @name.toESNode() ]
-    else
-      esnode.declare 'var', [ @name.toESNode() , @value.toESNode() ]
   noInit: () ->
     AST.local @name
   assign: (value = @value) ->
     AST.assign @name, value
   canReduce: () -> true # this is actually not necessarily true...!!!
-  selfESNode: () ->
-    if @value
-      @baseSelfESNode @name.selfESNode() , @value.selfESNode()
-    else
-      @baseSelfESNode @name.selfESNode()
 
 # REF is used to determine whether or not we are referring to exactly the same thing.
 AST.register class REF extends AST 
@@ -336,17 +217,8 @@ AST.register class REF extends AST
     AST.assign @, @value
   export: (@as = null ) ->
     AST.export [ AST.binding(@, @as) ]
-  toESNode: () ->
-    if @value.type() == 'proxyval'
-      @value.toESNode()
-    else if @isDefine
-      esnode.funcall esnode.member(esnode.identifier('_module'), esnode.identifier('get')), [ esnode.literal(@name.value) ]
-    else
-      @name.toESNode()
   normalName: () ->
     @name
-  selfESNode: () ->
-    @baseSelfESNode @name.toESNode(), @value.toESNode()
 
 # temp var should really just be a way to coin a particular reference - the reference itself should have 
 # automatic names...
@@ -362,10 +234,6 @@ AST.register class TEMPVAR extends AST
     @name + if @suffix then "$#{@suffix}" else ''
   toString: () ->
     "{TEMPVAR #{@normalized()} #{@value}}"
-  toESNode: () ->
-    esnode.declare 'var', [ esnode.identifier(@normalized()), @value.toESNode() ]
-  selfESNode: () ->
-    @baseSelfESNode esnode.literal(@name), @value.selfESNode(), esnode.literal(@suffix)
 
 # PROXYVAL 
 # used to hold special transformation logic. 
@@ -374,15 +242,6 @@ AST.register class TEMPVAR extends AST
 AST.register class PROXYVAL extends AST 
   @type: 'proxyval'
   constructor: (@name, @compiler) ->
-  toESNode: () ->
-    if typeof(@compiler) == 'function' or @compiler instanceof Function 
-      @compiler()
-    else if @compiler instanceof AST
-      @compiler.toESNode()
-    else
-      @name
-  selfESNode: () ->
-    @baseSelfESNode esnode.literal(@name), @esnode.literal(@compiler)
 
 AST.register class PARAM extends AST
   constructor: (@name, @paramType = null, @default = null) ->
@@ -414,13 +273,6 @@ AST.register class PARAM extends AST
       "{PARAM #{@name} = #{@default}}"
     else 
       "{PARAM #{@name}}"
-  toESNode: () ->
-    @name.toESNode()
-  selfESNode: () ->
-    type = @paramType?.selfESNode() or esnode.literal @paramType
-    defaultVal = @default?.selfESNode() or esnode.literal(@default)
-    name = @name.selfESNode()
-    @baseSelfESNode name, type, defaultVal
 
 AST.register class PROCEDURE extends AST
   @type: 'procedure'
@@ -449,16 +301,6 @@ AST.register class PROCEDURE extends AST
       @buffer.push " : ", @returns.toString()
     buffer.push "}"
     buffer.join ''
-  toESNode: () ->
-    func = esnode.function @name?.toESNode() or null, (param.toESNode() for param in @params), @body.toESNode()
-    maker = esnode.member(esnode.identifier('_rt'), esnode.identifier('proc'))
-    #esnode.funcall maker, [ func , @selfESNode() ]
-    esnode.funcall maker, [ func ]
-  selfESNode: () ->
-    params = 
-      esnode.array(param.selfESNode() for param in @params )
-    name = if @name then esnode.literal(@name) else esnode.null_()
-    @baseSelfESNode name, params, @body.selfESNode(), @returns?.selfESNode() or esnode.literal(@returns)
 
 AST.register class TASK extends AST
   @type: 'task'
@@ -477,13 +319,6 @@ AST.register class TASK extends AST
     @body.isAsync()
   toString: () ->
     "{TASK #{@name} #{@params} #{@body} #{@returns}}"
-  toESNode: () ->
-    esnode.function @name?.toESNode() or null, (param.toESNode() for param in @params), @body.toESNode()
-  selfESNode: () ->
-    params = 
-      esnode.array(param.selfESNode() for param in @params )
-    name = if @name then esnode.identifier(@name) else esnode.null_()
-    @baseSelfESNode name, params, @body.selfESNode(), @returns?.selfESNode() or esnode.literal(@returns)
 
 
 AST.register class IF extends AST
@@ -495,11 +330,7 @@ AST.register class IF extends AST
     @then.isAsync() or @else.isAsync()
   toString: () ->
     "{IF #{@cond} #{@then} #{@else}}"
-  toESNode: () ->
-    esnode.if @cond.toESNode(), @then.toESNode(), @else.toESNode()
   canReduce: () -> true # this is actually not necessarily true...!!!
-  selfESNode: () ->
-    @baseSelfESNode @cond.selfESNode(), @then.selfESNode(), @else.selfESNode()
 
 AST.register class FUNCALL extends AST
   @type: 'funcall'
@@ -519,8 +350,6 @@ AST.register class FUNCALL extends AST
       false
   toString: () ->
     "{FUNCALL #{@funcall} #{@args}}"
-  toESNode: () ->
-    esnode.funcall @funcall.toESNode(), (arg.toESNode() for arg in @args)
   canReduce: () -> # this is actually not necessarily true...!!!
     if @funcall.canReduce()
       return true
@@ -528,8 +357,6 @@ AST.register class FUNCALL extends AST
       if arg.canReduce()
         return true
     return false
-  selfESNode: () ->
-    @baseSelfESNode @funcall.selfESNode(), esnode.array(arg.selfESNode() for arg in @args)
 
 AST.register class TASKCALL extends FUNCALL
   @type: 'taskcall'
@@ -537,21 +364,13 @@ AST.register class TASKCALL extends FUNCALL
     true
   toString: () ->
     "{TASKCALL #{@funcall} #{@args}}"
-  toESNode: () ->
-    esnode.funcall @funcall.toESNode(), (arg.toESNode() for arg in @args)
-  selfESNode: () ->
-    @baseSelfESNode @funcall.selfESNode(), esnode.array(arg.selfESNode() for arg in @args)
 
 AST.register class RETURN extends AST
   @type: 'return'
   isAsync: () ->
     @value.isAsync()
-  toESNode: () ->
-    esnode.return @value.toESNode()
   canReduce: () ->
     @value.canReduce()
-  selfESNode: () -> 
-    @baseSelfESNode @value.selfESNode()
 
 AST.register class BINARY extends AST
   @type: 'binary'
@@ -560,17 +379,11 @@ AST.register class BINARY extends AST
     @op == v.op and @lhs.equals(v.lhs) and @rhs.equals(v.rhs)
   toString: () ->
     "{#{@op} #{@lhs} #{@rhs}}"
-  toESNode: () ->
-    esnode.binary @op, @lhs.toESNode(), @rhs.toESNode()
   canReduce: () ->
     @lhs.canReduce() or @rhs.canReduce()
-  selfESNode: () ->
-    @baseSelfESNode esnode.literal(@op), @lhs.selfESNode(), @rhs.selfESNode()
 
 AST.register class THROW extends AST
   @type: 'throw'
-  toESNode: () ->
-    esnode.throw @value.toESNode()
   canReduce: () ->
     @value.canReduce()
 
@@ -583,11 +396,7 @@ AST.register class CATCH extends AST
     @body.isAsync()
   toString: () ->
     "{CATCH #{@param} #{@body}}"
-  toESNode: () ->
-    esnode.catch @param.toESNode(), @body.toESNode()
   canReduce: () -> true
-  selfESNode: () ->
-    @baseSelfESNode @param.selfESNode(), @body.selfESNode()
 
 AST.register class FINALLY extends AST
   @type: 'finally'
@@ -598,12 +407,8 @@ AST.register class FINALLY extends AST
     @body.isAsync()
   toString: () ->
     "{FINALLY #{@body}}"
-  toESNode: () ->
-    @body.toESNode()
   canReduce: () -> 
     @body.canReduce()
-  selfESNode: () ->
-    @baseSelfESNode @body.selfESNode()
 
 AST.register class TRY extends AST 
   @type: 'try'
@@ -634,13 +439,7 @@ AST.register class TRY extends AST
       @finally?.isAsync() or false 
   toString: () ->
     "{TRY #{@body} #{@catches} #{@finally}}"
-  toESNode: () ->
-    esnode.try @body.toESNode(), (exp.toESNode() for exp in @catches), @finally?.toESNode() or null
   canReduce: () -> true
-  selfESNode: () ->
-    catches = esnode.array(exp.selfESNode() for exp in @catches)
-    final = @finally?.selfESNode() or esnode.literal(@finally)
-    @baseSelfESNode @body.selfESNode(), catches, final
 
 AST.register class TOPLEVEL extends AST 
   @type: 'toplevel'
@@ -698,16 +497,6 @@ AST.register class TOPLEVEL extends AST
   isAsync: () -> true 
   toString: () ->
     "{TOPLEVEL #{@body}}"
-  toESNode: () ->
-    esnode.funcall esnode.member(esnode.identifier('_rt'), esnode.identifier('toplevel')),
-      [ 
-        esnode.array(imp.specESNode() for imp in @imports)
-        esnode.function null, 
-          [ @moduleParam.toESNode() ].concat(imp.idESNode() for imp in @imports).concat([ @callbackParam.toESNode() ]), 
-          @body.toESNode()
-      ]
-  selfESNode: () ->
-    @baseSelfESNode @body.selfESNode()
 
 AST.register class MODULE extends TOPLEVEL
   @type: 'module'
@@ -732,16 +521,6 @@ AST.register class MODULE extends TOPLEVEL
     module
   toString: () ->
     "{MODULE #{@body}}"
-  toESNode: () ->
-    # _rt.module(id, function(module, deps...) { })
-    esnode.funcall esnode.member(esnode.identifier('_rt'), esnode.identifier('module')),
-      [
-        @spec.toESNode()
-        esnode.array(imp.specESNode() for imp in @imports)
-        esnode.function null, 
-          [ @moduleParam.toESNode() ].concat(imp.idESNode() for imp in @imports).concat([@callbackParam.toESNode()])
-          @body.toESNode()
-      ]
 
 AST.register class BINDING extends AST
   @type: 'binding'
@@ -753,8 +532,6 @@ AST.register class BINDING extends AST
       "{AS #{@spec} #{@as}}"
     else
       "{#{@spec}}"
-  toESNode: () ->
-    
 
 AST.register class IMPORT extends AST
   @type: 'import'
@@ -766,8 +543,6 @@ AST.register class IMPORT extends AST
     AST.param AST.symbol @spec.value.replace(/[\.\/\\]/g, '_') 
   toString: () ->
     "{IMPORT #{@spec}} #{@bindings}"
-  specESNode: () ->
-    @spec.toESNode()
   defines: () ->
     for binding in @bindings 
       @define binding
@@ -775,15 +550,8 @@ AST.register class IMPORT extends AST
     AST.define binding.as, AST.funcall(AST.member(@idParam.ref(), AST.symbol('get')), [AST.string(binding.spec.value)])
   proxy: (binding) ->
     AST.proxyval binding.as, AST.funcall(AST.member(AST.symbol('_module'), AST.symbol('get')), [ AST.string(binding.as.value)])
-  idESNode: () ->
-    @idParam.toESNode()
-  toESNode: () ->
-    esnode.declare 'var', (@bindingESNode(binding) for binding in @bindings)...
   importSpec: () ->
     @spec.value
-  bindingESNode: (binding) ->
-    res = [ binding.as.toESNode() , esnode.member(@idParam.toESNode(), binding.spec.toESNode()) ]
-    res
 
 AST.register class EXPORT extends AST 
   @type: 'export'
@@ -791,15 +559,6 @@ AST.register class EXPORT extends AST
   toString: () ->
     "{EXPORT #{@bindings}}"
   isAsync: () -> false
-  toESNode: () ->
-    bindings = 
-      for binding in @bindings 
-        esnode.funcall esnode.member(esnode.identifier('_module'), esnode.identifier('export')), 
-          [ 
-            esnode.literal(binding.spec.value)
-            #binding.spec.toESNode()
-          ]
-    esnode.block bindings
 
 ###
 
@@ -814,10 +573,6 @@ AST.register class VAR extends AST
   constructor: (@name) ->
   toString: () -> 
     "{VAR #{@name}}"
-  toESNode: () ->
-    esnode.declare 'var', [ esnode.identifier(@name), null ]
-  selfESNode: () -> 
-    @baseSelfESNode esnode.literal(@name)
 
 AST.register class WHILE extends AST
   @type: 'while'
@@ -828,49 +583,28 @@ AST.register class WHILE extends AST
     @cond.isAsync() or @block.isAsync()
   toString: () ->
     "{WHILE #{@cond} #{@block}}"
-  toESNode: () ->
-    escode.while @cond.toESNode(), @block.toESNode()
-  selfESNode: () -> 
-    @baseSelfESNode @cond.selfESNode(), @block.selfESNode()
 
 AST.register class CONTINUE extends AST
   @type: 'continue'
   toString: () -> 
     "{CONTINUE}"
-  toESNode: () ->
-    escode.continue()
-  selfESNode: () -> 
-    @baseSelfESNode()
 
 AST.register class SWITCH extends AST
   @type: 'switch'
   constructor: (@cond, @cases = []) ->
   toString: () ->
     "{SWITCH #{@cond} #{@cases}}"
-  toESNode: () ->
-    escode.switch @cond.toESNode(), (c.toESNode() for c in @cases)
-  selfESNode: () ->
-    @baseSelfESNode @cond.selfESNode(), (c.selfESNode() for c in @cases)
 
 AST.register class CASE extends AST
   @type: 'case'
   constructor: (@cond, @exp) ->
   toString: () ->
     "{CASE #{@cond} #{@exp}}"
-  toESNode: () ->
-    escode.case @cond.toESNode(), @exp.toESNode()
-  selfESNode: () ->
-    @baseSelfESNode @cond.selfESNode(), @exp.selfESNode()
 
 AST.register class DEFAULTCASE extends AST
   @type: 'defaultCase'
   constructor: (@exp) ->
   toString: () ->
     "{DEFAULT #{@exp}}"
-  toESNode: () ->
-    escode.defaultCase @exp.toESNode()
-  selfESNode: () ->
-    @baseSelfESNode @exp.selfESNode()
-
 
 module.exports = AST

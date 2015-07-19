@@ -97,7 +97,7 @@ _define = (ast) ->
       when 'symbol'
         esnode.literal ast.name.value
       else
-        throw new Error("AST.define.toESNode:unknown_name_type: #{ast.name}")
+        throw new Error("escompile.define:unknown_name_type: #{ast.name}")
   value = 
     esnode.funcall esnode.member(esnode.identifier('_module'), esnode.identifier('define')),
       [ name , _compile(ast.value) ]
@@ -108,7 +108,7 @@ _define = (ast) ->
       when 'symbol'
         _compile(ast.name)
       else
-        throw new Error("AST.define.toESNode:unknown_name_type: #{ast.name}")
+        throw new Error("escompile.define:unknown_name_type: #{ast.name}")
   esnode.declare 'var', [ id, value ]
   
 register AST.get('define'), _define
