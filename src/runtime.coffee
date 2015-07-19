@@ -14,8 +14,7 @@ TR = require './trace'
 UNIQ = require './unique'
 async = require 'async'
 
-esnode = require './esnode'
-escodegen = require 'escodegen'
+compiler = require './escompile'
 
 fs = require 'fs'
 
@@ -89,7 +88,6 @@ class Module
 
 class Toplevel 
   constructor: (@depends, @proc, @module) ->
-    console.log 'Toplevel.ctor', @module.name
   eval: (cb) ->
     args = [ @module ].concat(@depends).concat [cb]
     try 
@@ -167,9 +165,7 @@ class Runtime
     #ast = CPS.transform ast
     ast
   compile: (ast) ->
-    node = ast.toESNode()
-    compiled = '(' + escodegen.generate(node)  + ')'
-    loglet.log '-------- Runtime.compiled =>', compiled
+    compiled = compiler.compile ast
     vm.runInContext compiled, @context
   isPackage: (filePath) -> 
     false

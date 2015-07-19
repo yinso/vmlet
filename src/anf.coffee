@@ -107,14 +107,13 @@ transformBlock = (ast, env, block) ->
 register AST.get('block'), transformBlock
 
 transformDefine = (ast, env, block) ->
-  console.log 'ANF.define', ast
   res = transform ast.value, env
   block.push AST.define(ast.name, res)
   res
 
 register AST.get('define'), transformDefine
 
-transformLocal = tr.trace 'anf.local', (ast, env, block) ->
+transformLocal = (ast, env, block) ->
   res = 
     if ast.value 
       transform ast.value, env 

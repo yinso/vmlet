@@ -168,7 +168,7 @@ AST.register class ARRAY extends AST
     return false
   selfESNode: () ->
     @baseSelfESNode esnode.array(item.selfESNode() for item in @value)
-
+###
 AST.register class LIST extends AST
   @type: 'list'
   _equals: (v) -> 
@@ -202,6 +202,7 @@ AST.register class UNQUOTESPLICING extends AST
   @type: 'unquotesplicing'
   _equals: (v) ->
     @value.equals(v.value)
+###
 
 AST.register class BLOCK extends AST
   constructor: (@items = []) ->

@@ -136,15 +136,9 @@ pretty = (obj, level = 0, dupe = Pair.empty) ->
       else if obj instanceof Dupe
         [ obj.toString() ]
       else if obj instanceof Array 
-        if dupe.has(obj)
-          [ '#<dupe>' ]
-        else
-          prettyArray obj, level, Pair.cons(obj, dupe)
+        prettyArray obj, level, Pair.cons(obj, dupe)
       else
-        if dupe.has(obj)
-          [ '#<dupe>' ]
-        else
-          prettyObject obj, level, Pair.cons(obj, dupe)
+        prettyObject obj, level, Pair.cons(obj, dupe)
 
 flatten = (ary, res = []) ->
   for item, i in ary 
