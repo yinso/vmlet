@@ -273,8 +273,7 @@ register AST.get('assign'), cpsAssign
 
 makeCpsDef = (type) ->
   (ast, contAST, cbAST) ->
-    console.log "--cps.#{type}", ast, ast.isAsync(), contAST, cbAST
-    #loglet.log "--cps.#{type}", ast, contAST
+    #console.log "--cps.#{type}", ast, ast.isAsync(), contAST, cbAST
     if ast.isAsync()
       param = AST.param ast.name.clone()
       contAST = combine AST.define(ast.name, param.name), contAST

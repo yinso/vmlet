@@ -258,7 +258,9 @@ transformLet = (ast, env, block) ->
   defines = []
   for define in ast.defines
     res = _transformInner define, newEnv
-    block.push res.items[0]
+    for exp in res.items
+      block.push exp
+    #block.push res.items[0]
   body = _transformInner ast.body , newEnv
   if body.type() == 'block'
     for exp in body.items 

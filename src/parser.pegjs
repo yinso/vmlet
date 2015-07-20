@@ -95,6 +95,19 @@ letDefineExp
 = id:SymbolExp _ '=' _ exp:Expression _ ','? _ { return helper.define(id, exp); }
 
 /************************************************************************
+LetTaskExp
+************************************************************************/
+LetTaskExp
+= 'let' _ defines:letDefineTaskList _ body:Expression { return helper.let(defines, body); }
+
+letDefineTaskList 
+= '(' _ defines:letDefineTaskExp+ _ ')' _ { return defines; }
+
+letDefineTaskExp 
+= id:SymbolExp _ '=' _ exp:TaskExpression _ ','? _ { return helper.define(id, exp); }
+/ id:SymbolExp _ exp:TaskcallExp _ ','? _ { return helper.define(id, exp); }
+
+/************************************************************************
 FunctionDeclExp
 ************************************************************************/
 FunctionDeclExp
@@ -121,6 +134,7 @@ taskDeclHeadExp
 TaskExpression
 = IfTaskExp
 / OperatorTaskExp 
+/ LetTaskExp
 / ArrayTaskExp 
 / ObjectTaskExp 
 / BlockTaskExp 
