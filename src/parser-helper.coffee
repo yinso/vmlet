@@ -112,6 +112,9 @@ export_ = (spec) ->
 binding = (spec, as = null) ->
   AST.binding spec, as
 
+let_ = (defines, body) ->
+  AST.let defines, body
+
 module.exports = 
   number: number
   bool: bool
@@ -138,5 +141,6 @@ module.exports =
   import: import_
   export: export_
   binding: binding
+  let: let_
 
 

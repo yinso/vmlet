@@ -38,7 +38,7 @@ normalizeBlock = (ast) ->
   for item, i in ast.items 
     if i < ast.items.length - 1 
       switch item.type()
-        when 'local', 'define', 'export', 'import'
+        when 'local', 'define', 'export', 'import', 'block'
           items.push item
     else
       items.push switch item.type()
@@ -121,7 +121,6 @@ transformLocal = (ast, env, block) ->
       ast.value 
   cloned = AST.local ast.name , res 
   block.push cloned 
-  cloned
 
 register AST.get('local'), transformLocal
 
@@ -239,6 +238,21 @@ transformExport = (ast, env, block) ->
   AST.unit()
 
 register AST.get('export'), transformExport
+
+transformLet = (ast, env, block) ->
+  newEnv = new Environment env
+  defines = []
+  for define in ast.defines
+    res = _transformInner define, newEnv
+    block.push res.items[0]
+  body = _transformInner ast.body , newEnv
+  if body.type() == 'block'
+    for exp in body.items 
+      block.push exp 
+  else
+    block.push body
+
+register AST.get('let'), transformLet
 
 module.exports = 
   register: register

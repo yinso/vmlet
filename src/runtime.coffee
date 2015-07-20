@@ -11,7 +11,6 @@ SymbolTable = require './symboltable'
 Unit = require './unit'
 util = require './util'
 TR = require './trace'
-UNIQ = require './unique'
 async = require 'async'
 
 compiler = require './escompile'
@@ -61,7 +60,7 @@ class Module
     @depends = [] # list of modules that this module depends on...
   idName: () ->
     if @name == ':main'
-      AST.symbol '_module'
+      AST.moduleID
     else
       AST.symbol @name.replace /[\.\\\/]/g, '_'
   define: (key, val) ->
@@ -110,7 +109,7 @@ class Runtime
         (args...) ->
           return readFile args...
     @baseEnv.define AST.symbol('console'), AST.proxyval('console', AST.symbol('console'))
-    @baseEnv.define AST.symbol('import'), AST.proxyval('import', AST.member(AST.symbol('_rt'), AST.symbol('import')))
+    @baseEnv.define AST.symbol('import'), AST.proxyval('import', AST.member(AST.runtimeID, AST.symbol('import')))
     @context = vm.createContext { _rt: @ , console: console , process: process }
   unit: Unit.unit
   proc: (func, def) -> 

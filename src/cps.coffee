@@ -123,7 +123,7 @@ get = (ast) ->
 override = (ast, cps) ->
   types[ast.type] = cps
 
-runtimeParam = AST.param(AST.symbol('_rt'))
+runtimeParam = AST.param(AST.runtimeID)
 callbackParam = AST.param(AST.symbol('_done'))
 errorParam = AST.param(AST.symbol('e'))
 cbAST = callbackParam.ref()

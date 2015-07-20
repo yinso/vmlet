@@ -78,6 +78,12 @@ T.register 'return', ($r) ->
 , ($r, $finally) -> 
   T.transform $finally
 
+T.register 'return', ($r) ->
+  if $r.value.type() == 'let'
+    [ $r.value.defines , $r.value.body ]
+, ($r, $defines , $body) -> 
+  AST.let $defines, T.transform AST.return($body)
+
 T.register 'local', ($l) -> 
   if not $l.value
     return false

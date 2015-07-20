@@ -29,6 +29,8 @@ class SymbolTable
       @prev.has sym
     else
       false
+  hasCurrent: (sym) ->
+    @_has sym
   _has: (sym) ->
     @inner.hasOwnProperty(sym.value)
   get: (sym) ->

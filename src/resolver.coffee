@@ -81,7 +81,7 @@ transformTopLevel = (ast, env) ->
 register AST.get('toplevel'), transformTopLevel
 
 transformDefine = (ast, env) ->
-  if env.has ast.name 
+  if env.hasCurrent ast.name 
     throw new Error("duplicate_define: #{ast.name}")
   ref = env.define ast.name 
   res = _transform ast.value, env
@@ -209,12 +209,25 @@ transformImport = (ast, env) ->
 register AST.get('import'), transformImport 
 
 transformExport = (ast, env) ->
-  for binding in ast.bindings 
-    if not env.has binding.spec 
-      throw new Error("export:unknown_identifier: #{binding.binding}")
-  ast
+  bindings = 
+    for binding in ast.bindings 
+      if not env.has binding.spec 
+        throw new Error("export:unknown_identifier: #{binding.binding}")
+      else
+        AST.binding(env.get(binding.spec), binding.as)
+  AST.export(bindings)
 
 register AST.get('export'), transformExport
+
+transformLet = (ast, env) ->
+  newEnv = new SymbolTable env
+  defines = 
+    for define in ast.defines 
+      _transform define , newEnv
+  body = _transform ast.body , newEnv 
+  AST.let defines, body
+
+register AST.get('let'), transformLet
 
 module.exports =
   transform: transform

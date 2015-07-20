@@ -43,6 +43,7 @@ Keywords
 / 'import'
 / 'export'
 / 'from'
+/ 'let'
 
 TopLevelExpression 
 = TaskExpression
@@ -52,6 +53,7 @@ TopLevelExpression
 
 Expression
 = exp:IfExp _ { return exp; }
+/ exp:LetExp _ { return exp; }
 / op:OperatorExp _ { return op; }
 / exp:MemberExp _ { return exp ; }
 / n:NumberExp _ { return n; }
@@ -79,6 +81,18 @@ DefineExp
 / taskDeclHeadExp _ id:SymbolExp _ params:funcParametersExp _ exp:TaskExpression { 
   return helper.define(id, helper.task(id, params,exp)); 
 }
+
+/************************************************************************
+LetExp
+************************************************************************/
+LetExp
+= 'let' _ defines:letDefineList _ body:Expression { return helper.let(defines, body); }
+
+letDefineList 
+= '(' _ defines:letDefineExp+ _ ')' _ { return defines; }
+
+letDefineExp 
+= id:SymbolExp _ '=' _ exp:Expression _ ','? _ { return helper.define(id, exp); }
 
 /************************************************************************
 FunctionDeclExp

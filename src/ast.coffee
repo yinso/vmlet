@@ -58,9 +58,12 @@ AST.register class SYMBOL extends AST
     else
       "{SYM #{@value}}"
 
+runtimeID = AST.runtimeID = AST.symbol('_rt')
+moduleID = AST.moduleID = AST.symbol('_module')
+
 AST.register class STRING extends AST
   @type: 'string'
-    
+  
 AST.register class BOOL extends AST
   @type: 'bool'
   @TRUE = new BOOL(true)
@@ -302,6 +305,15 @@ AST.register class PROCEDURE extends AST
     buffer.push "}"
     buffer.join ''
 
+# having LET expression is basically the same as 
+AST.register class LET extends AST 
+  @type: 'let'
+  constructor: (@defines, @body) ->
+  _equals: (v) -> 
+    @ == v
+  toString: () -> 
+    "{LET #{@defines} #{@body}}"
+
 AST.register class TASK extends AST
   @type: 'task'
   constructor: (@name, @params, @body, @returns = null) ->
@@ -444,7 +456,7 @@ AST.register class TRY extends AST
 AST.register class TOPLEVEL extends AST 
   @type: 'toplevel'
   constructor: (body = AST.unit()) ->
-    @moduleParam = AST.param(AST.symbol('_module'))
+    @moduleParam = AST.param(moduleID)
     @callbackParam = AST.param(AST.symbol('_done'))
     @errorParam = AST.param AST.symbol('e')
     @body = @normalizeBody body
@@ -549,7 +561,7 @@ AST.register class IMPORT extends AST
   define: (binding) ->
     AST.define binding.as, AST.funcall(AST.member(@idParam.ref(), AST.symbol('get')), [AST.string(binding.spec.value)])
   proxy: (binding) ->
-    AST.proxyval binding.as, AST.funcall(AST.member(AST.symbol('_module'), AST.symbol('get')), [ AST.string(binding.as.value)])
+    AST.proxyval binding.as, AST.funcall(AST.member(moduleID, AST.symbol('get')), [ AST.string(binding.as.value)])
   importSpec: () ->
     @spec.value
 
