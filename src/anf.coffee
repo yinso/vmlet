@@ -245,11 +245,12 @@ transformImport = (ast, env, block) ->
 register AST.get('import'), transformImport
 
 transformExport = (ast, env, block) ->
-  for binding in ast.bindings 
-    ref = env.get binding.spec 
-    block.push AST.export [ binding ]
-    #block.push ref.export()
-  AST.unit()
+  block.push ast
+  #for binding in ast.bindings 
+  #  ref = env.get binding.spec 
+  #  block.push AST.export [ binding ]
+  #  #block.push ref.export()
+  # AST.unit()
 
 register AST.get('export'), transformExport
 

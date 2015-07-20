@@ -9,4 +9,17 @@ define func fib(n) {
 
 console.log('hello world')
 
-export fib
+define func even(n)
+  if n == 0
+    true
+  else
+    odd(n - 1)
+
+define func odd(n) 
+  if n == 0
+    false
+  else
+    even(n - 1)
+
+export fib, odd, even
+

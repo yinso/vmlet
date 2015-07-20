@@ -27,7 +27,7 @@ transform = (ast, env) ->
     when 'toplevel', 'module'
       resolved = _transform ast.body, env
       anf = ANF.transform resolved, env
-      console.log 'RESOLVER.anffed', anf
+      # console.log 'RESOLVER.anffed', anf
       T.transform ast.clone(AST.return(anf))
     else
       resolved = _transform ast, env
@@ -68,9 +68,18 @@ transformBlock = (ast, env) ->
   # maybe that's better... hmm...
   # function and let introduce new scoping.
   #newEnv = new SymbolTable env
+  # first pull out all of the defines. 
+  for item, i in ast.items 
+    if item.type() == 'define'
+      if env.hasCurrent item.name
+        throw new Error("duplicate_define: #{item.name}")
+      env.define item.name
   items = 
-    for i in [0...ast.items.length]
-      _transform ast.items[i], env
+    for item, i in ast.items
+      if item.type() == 'define'
+        transformDefineVal item, env
+      else
+        _transform item, env
   AST.block items
 
 register AST.get('block'), transformBlock
@@ -80,16 +89,20 @@ transformTopLevel = (ast, env) ->
 
 register AST.get('toplevel'), transformTopLevel
 
-transformDefine = (ast, env) ->
+transformDefineVal = (ast, env) ->
+  # at this time we assume define exists... 
+  ref = env.get ast.name 
+  res = _transform  ast.value, env 
+  ref.value = res 
+  if env.level() <= 1 
+    ref.isDefine = true 
+  ref.define()
+
+transformDefine = tr.trace 'resolver.define', (ast, env) ->
   if env.hasCurrent ast.name 
     throw new Error("duplicate_define: #{ast.name}")
   ref = env.define ast.name 
-  res = _transform ast.value, env
-  ref.value = res # update the value.
-  #console.log '-- resolver.define', ref, env.level(), env
-  if env.level() <= 1 # this is arbitrary decided for now... base + toplevel block ?
-    ref.isDefine = true
-  ref.define()
+  transformDefineVal ast, env
 
 register AST.get('define'), transformDefine
 

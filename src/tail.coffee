@@ -21,6 +21,10 @@ AST = require './ast'
 # maybe I need to get rid of my reliance on REF now that I have removed checking against environment everywhere else but 
 # resolver...
 
-tre = () ->
+transform = (ast) ->
+  console.log 'TRE.transform', ast 
+  ast
   
+module.exports = 
+  transform: transform
 

@@ -2,6 +2,7 @@ AST = require './ast'
 T = require './transformer'
 tr = require './trace'
 CPS = require './cps'
+TRE = require './tail'
 
 # when this is called it would be ANF'd.
 atomicTypes = 
@@ -199,7 +200,7 @@ T.register 'procedure', ($p) ->
       body
     else
       AST.block [ body ]
-  AST.procedure $name, $params, body, $returns
+  TRE.transform AST.procedure $name, $params, body, $returns
 
 T.register 'task', ($p) -> 
   [ $p.name , $p.params, $p.body , $p.returns ]

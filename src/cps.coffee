@@ -137,7 +137,7 @@ cps = (ast) ->
         cpsTopLevel ast
       else # this should error!
         throw new Error("CPS:unsupported_toplevel_type: #{ast}")
-  console.log '-------- Runtime.cpsed =>', ast
+  # console.log '-------- Runtime.cpsed =>', ast
   res
 
 _cpsOne = (item, contAST, cbAST) ->
@@ -156,7 +156,7 @@ register AST.get('toplevel'), cpsTopLevel
 cpsTask = (ast, contAST, cbAST) ->
   body = normalize ast.body
   params = [].concat(ast.params).concat(callbackParam)
-  console.log '--cpTask', body
+  # console.log '--cpTask', body
   body = 
     if body.items[0].type() == 'try'
         _cpsOne(body, cbAST, cbAST)
@@ -200,7 +200,7 @@ register AST.get('block'), cpsBlock
 
 cpsTaskcall = (ast, contAST, cbAST) ->
   args = [].concat(ast.args)
-  console.log '--cpsTaskcall', ast, contAST, cbAST
+  # console.log '--cpsTaskcall', ast, contAST, cbAST
   if contAST.type() == 'procedure'
     args.push contAST
   else
@@ -235,7 +235,7 @@ normalize = (ast) ->
 
 makeCallback = (contAST, cbAST, resParam = AST.param('res')) ->
   err = AST.symbol('err')
-  console.log '--makeCallback', contAST, cbAST, resParam
+  # console.log '--makeCallback', contAST, cbAST, resParam
   if contAST == cbAST
     contAST
   else
@@ -346,7 +346,7 @@ cpsThrow = (ast, contAST, cbAST) ->
 register AST.get('throw'), cpsThrow
 
 _makeErrorHandler = (catchExp, finallyExp, cbAST, name) ->
-  console.log '--cps.makeErrorHandler', catchExp?.body, finallyExp?.body, cbAST
+  # console.log '--cps.makeErrorHandler', catchExp?.body, finallyExp?.body, cbAST
   catchBody = _cpsOne catchExp.body, cbAST, cbAST
   resParam = AST.param(AST.symbol('res'))
   okReturnExp = AST.return(AST.funcall(cbAST, [ catchExp.param.name , resParam.name ]))
@@ -377,7 +377,7 @@ _makeErrorHandler = (catchExp, finallyExp, cbAST, name) ->
 
 cpsTry = (ast, contAST, cbAST) ->
   name = AST.symbol('__handleError', 1)
-  console.log '--cpsTry', ast.catches[0], ast.finally
+  # console.log '--cpsTry', ast.catches[0], ast.finally
   catchExp = 
     if ast.catches.length > 0
       ast.catches[0]
