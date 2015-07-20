@@ -103,14 +103,12 @@ class Runtime
     @parser = parser
     @AST = AST
     # now the biggest challenge starts!
-    @baseEnv.define AST.symbol('fs'),
-      readFile: @makeAsync (_rt) ->
-        readFile = _rt.member(fs, 'readFile')
-        (args...) ->
-          return readFile args...
+    # things in here are going to be things that can be loaded as part of the global environment... 
+    # how are we going to deal with using it?
+    @baseEnv.define AST.symbol('fs'), AST.proxyval('fs', AST.symbol('fs'))
     @baseEnv.define AST.symbol('console'), AST.proxyval('console', AST.symbol('console'))
     @baseEnv.define AST.symbol('import'), AST.proxyval('import', AST.member(AST.runtimeID, AST.symbol('import')))
-    @context = vm.createContext { _rt: @ , console: console , process: process }
+    @context = vm.createContext { _rt: @ , console: console , process: process , fs: fs }
   unit: Unit.unit
   proc: (func, def) -> 
     Object.defineProperty func, '__vmlet',

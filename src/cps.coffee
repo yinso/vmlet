@@ -200,6 +200,7 @@ register AST.get('block'), cpsBlock
 
 cpsTaskcall = (ast, contAST, cbAST) ->
   args = [].concat(ast.args)
+  console.log '--cpsTaskcall', ast, contAST, cbAST
   if contAST.type() == 'procedure'
     args.push contAST
   else
@@ -233,6 +234,7 @@ normalize = (ast) ->
     AST.block [ ast ]
 
 makeCallback = (contAST, cbAST, resParam = AST.param('res')) ->
+  err = AST.symbol('err')
   console.log '--makeCallback', contAST, cbAST, resParam
   if contAST == cbAST
     contAST
@@ -240,13 +242,13 @@ makeCallback = (contAST, cbAST, resParam = AST.param('res')) ->
     # this part needs to be ANF-ized...
     AST.procedure(undefined,
       [
-        AST.param('err')
+        AST.param(err)
         resParam
       ],
-      AST.if(AST.symbol('err'),
-        AST.return(AST.funcall(cbAST, [ AST.symbol('err') ])),
+      AST.block([AST.if(err,
+        AST.return(AST.funcall(cbAST, [ err ])),
         contAST
-      )
+      )])
     )
 
 cpsLocal = (ast, contAST, cbAST) ->
@@ -271,9 +273,12 @@ register AST.get('assign'), cpsAssign
 
 makeCpsDef = (type) ->
   (ast, contAST, cbAST) ->
+    console.log "--cps.#{type}", ast, ast.isAsync(), contAST, cbAST
     #loglet.log "--cps.#{type}", ast, contAST
     if ast.isAsync()
-      _cpsOne ast.value, makeCallback(contAST, cbAST, AST.param(ast.name)), cbAST
+      param = AST.param ast.name.name.clone()
+      contAST = combine AST.define(ast.name, param.name), contAST
+      _cpsOne ast.value, makeCallback(contAST, cbAST, param), cbAST
     else
       head = AST.make(type, 
         ast.name,

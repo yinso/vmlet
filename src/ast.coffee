@@ -52,6 +52,8 @@ AST.register class SYMBOL extends AST
     @value == v.value and @suffix == v.suffix
   nested: () ->
     new @constructor @value, if @suffix == undefined then 1 else @suffix + 1 
+  clone: () ->
+    new @constructor @value, if @suffix == undefined then 1 else @suffix + 1 
   toString: () ->
     if @suffix
       "{SYM #{@value};#{@suffix}}"

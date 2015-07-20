@@ -162,7 +162,7 @@ register AST.get('local'), _local
 _ref = (ast, env) ->
   if ast.value.type() == 'proxyval'
     _compile ast.value, env
-  else if @isDefine
+  else if ast.isDefine
     esnode.funcall esnode.member(_compile(AST.moduleID, env), esnode.identifier('get')), 
       [ esnode.literal(ast.name.value) ]
   else
@@ -253,11 +253,12 @@ _toplevel = (ast, env) ->
 register AST.get('toplevel'), _toplevel
 
 _module = (ast, env) ->
+  _rt = _compile(AST.runtimeID, env)
   imports = esnode.array(_importSpec(imp, env) for imp in ast.imports)
   params = 
     [ _compile(ast.moduleParam, env) ].concat(_importID(imp, env) for imp in ast.imports).concat([ _compile(ast.callbackParam, env) ])
   proc = esnode.function null, params, _compile(ast.body, env)
-  esnode.funcall esnode.member(_compile(AST.runtimeID, env), esnode.identifier('module')),
+  esnode.funcall esnode.member(_rt, esnode.identifier('module')),
     [
       _compile(ast.spec, env)
       imports

@@ -108,8 +108,14 @@ register AST.get('block'), transformBlock
 
 transformDefine = (ast, env, block) ->
   res = transform ast.value, env
-  block.push AST.define(ast.name, res)
-  res
+  if res.type() == 'block'
+    for exp, i in res.items
+      if i < res.items.length - 1 
+        block.push exp
+      else
+        block.push AST.define(ast.name, exp)
+  else
+    block.push AST.define(ast.name, res)
 
 register AST.get('define'), transformDefine
 
@@ -119,8 +125,16 @@ transformLocal = (ast, env, block) ->
       transform ast.value, env 
     else
       ast.value 
-  cloned = AST.local ast.name , res 
-  block.push cloned 
+  if res.type() == 'block'
+    for exp, i in res.items 
+      if i < res.items.length - 1 
+        block.push exp 
+      else
+        cloned = AST.local ast.name, exp 
+        block.push cloned 
+  else
+    cloned = AST.local ast.name , res 
+    block.push cloned 
 
 register AST.get('local'), transformLocal
 
