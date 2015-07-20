@@ -276,7 +276,7 @@ makeCpsDef = (type) ->
     console.log "--cps.#{type}", ast, ast.isAsync(), contAST, cbAST
     #loglet.log "--cps.#{type}", ast, contAST
     if ast.isAsync()
-      param = AST.param ast.name.name.clone()
+      param = AST.param ast.name.clone()
       contAST = combine AST.define(ast.name, param.name), contAST
       _cpsOne ast.value, makeCallback(contAST, cbAST, param), cbAST
     else

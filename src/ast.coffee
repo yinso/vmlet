@@ -218,6 +218,8 @@ AST.register class REF extends AST
       AST.define @, @value
     else
       AST.local @, @value
+  clone: () ->
+    AST.ref @name.clone(), @value
   assign: () ->
     AST.assign @, @value
   export: (@as = null ) ->
