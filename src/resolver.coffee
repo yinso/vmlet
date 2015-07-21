@@ -7,6 +7,7 @@ SymbolTable = require './symboltable'
 tr = require './trace'
 T = require './transformer'
 ANF = require './anf'
+util = require './util'
 
 _transTypes = {}
 
@@ -27,7 +28,6 @@ transform = (ast, env) ->
     when 'toplevel', 'module'
       resolved = _transform ast.body, env
       anf = ANF.transform resolved, env
-      # console.log 'RESOLVER.anffed', anf
       T.transform ast.clone(AST.return(anf))
     else
       resolved = _transform ast, env
@@ -38,32 +38,32 @@ _transform = (ast, env) ->
   resolver = get(ast)
   resolver ast, env
 
-transformScalar = (ast, env) ->
+_scalar = (ast, env) ->
   ast
 
-register AST.get('number'), transformScalar
-register AST.get('bool'), transformScalar
-register AST.get('null'), transformScalar
-register AST.get('string'), transformScalar
-register AST.get('ref'), transformScalar
-register AST.get('unit'), transformScalar
+register AST.get('number'), _scalar
+register AST.get('bool'), _scalar
+register AST.get('null'), _scalar
+register AST.get('string'), _scalar
+register AST.get('ref'), _scalar
+register AST.get('unit'), _scalar
 
-transformBinary = (ast, env) ->
+_binary = (ast, env) ->
   lhs = _transform ast.lhs, env
   rhs = _transform ast.rhs, env
   AST.binary ast.op, lhs, rhs
   
-register AST.get('binary'), transformBinary
+register AST.get('binary'), _binary
 
-transformIf = (ast, env) ->
+_if = (ast, env) ->
   cond = _transform ast.cond, env
   thenAST = _transform ast.then, env
   elseAST = _transform ast.else, env
   AST.if cond, thenAST, elseAST
 
-register AST.get('if'), transformIf
+register AST.get('if'), _if
 
-transformBlock = (ast, env) ->
+_block = (ast, env) ->
   # block doesn't introduce new scoping... 
   # maybe that's better... hmm...
   # function and let introduce new scoping.
@@ -71,75 +71,75 @@ transformBlock = (ast, env) ->
   # first pull out all of the defines. 
   for item, i in ast.items 
     if item.type() == 'define'
-      transformDefineName item, env
+      _defineName item, env
   items = 
     for item, i in ast.items
       if item.type() == 'define'
-        transformDefineVal item, env
+        _defineVal item, env
       else
         _transform item, env
   AST.block items
 
-register AST.get('block'), transformBlock
+register AST.get('block'), _block
 
-transformTopLevel = (ast, env) ->
+_toplevel = (ast, env) ->
   AST.toplevel _transform(ast.body, env)
 
-register AST.get('toplevel'), transformTopLevel
+register AST.get('toplevel'), _toplevel
 
-transformDefineName = (ast, env) ->
+_defineName = (ast, env) ->
   if env.hasCurrent ast.name 
     throw new Error("duplicate_define: #{ast.name}")
   ref = env.define ast.name 
   if env.level() <= 1 
     ref.isDefine = true 
 
-transformDefineVal = (ast, env) ->
+_defineVal = (ast, env) ->
   # at this time we assume define exists... 
   ref = env.get ast.name 
   res = _transform  ast.value, env 
   ref.value = res 
   ref.define()
 
-transformDefine = tr.trace 'resolver.define', (ast, env) ->
-  transformDefineName ast, env
-  transformDefineVal ast, env
+_define = tr.trace 'resolver.define', (ast, env) ->
+  _defineName ast, env
+  _defineVal ast, env
 
-register AST.get('define'), transformDefine
+register AST.get('define'), _define
 
-transformIdentifier = (ast, env) ->
+_identifier = (ast, env) ->
   #console.log 'RESOLVER.identifier', ast, env
   if env.has ast
     env.get ast
   else
     throw errorlet.create {error: 'RESOLVER.transform:unknown_identifier', id: ast}  
   
-register AST.get('symbol'), transformIdentifier
+register AST.get('symbol'), _identifier
 
-transformObject = (ast, env) ->
+_object = (ast, env) ->
   keyVals = 
     for [key, val] in ast.value
       v = _transform val, env
       [key, v]
   AST.object keyVals
 
-register AST.get('object'), transformObject
+register AST.get('object'), _object
 
-transformArray = (ast, env) ->
+_array = (ast, env) ->
   items = 
     for v in ast.value
       _transform v, env
   AST.array items
 
-register AST.get('array'), transformArray
+register AST.get('array'), _array
 
-transformMember = (ast, env) ->
+_member = (ast, env) ->
   head = _transform ast.head, env
   AST.member head, ast.key
 
-register AST.get('member'), transformMember
+register AST.get('member'), _member
 
-transformFuncall = (ast, env) ->
+_funcall = (ast, env) ->
   args = 
     for arg in ast.args
       _transform arg, env
@@ -147,21 +147,21 @@ transformFuncall = (ast, env) ->
   funcall = _transform ast.funcall, env
   AST.make 'funcall', funcall, args
 
-register AST.get('funcall'), transformFuncall
+register AST.get('funcall'), _funcall
 
-transformTaskcall = (ast, env) ->
+_taskcall = (ast, env) ->
   args = 
     for arg in ast.args
       _transform arg, env
   funcall = _transform ast.funcall, env
   AST.make('taskcall', funcall, args)
 
-register AST.get('taskcall'), transformTaskcall
+register AST.get('taskcall'), _taskcall
 
-transformParam = (ast, env) ->
+_param = (ast, env) ->
   ast
   
-register AST.get('param'), transformParam
+register AST.get('param'), _param
 
 makeProc = (type) ->
   (ast, env) ->
@@ -182,47 +182,47 @@ makeProc = (type) ->
 register AST.get('procedure'), makeProc('procedure')
 register AST.get('task'), makeProc('task')
 
-transformThrow = (ast, env) ->
+_throw = (ast, env) ->
   exp = _transform ast.value, env
   AST.make 'throw', exp
 
-register AST.get('throw'), transformThrow
+register AST.get('throw'), _throw
 
-transformCatch = (ast, env) ->
+_catch = (ast, env) ->
   newEnv = new SymbolTable env
   ref = newEnv.defineParam ast.param
   body = _transform ast.body, newEnv
   AST.make 'catch', ast.param, body
 
-transformFinally = (ast, env) ->
+_finally = (ast, env) ->
   newEnv = new SymbolTable env
   body = _transform ast.body, newEnv
   AST.make 'finally', body
 
-transformTry = (ast, env) ->
+_try = (ast, env) ->
   newEnv = new SymbolTable env
   body = _transform ast.body, newEnv
   catches = 
     for c in ast.catches
-      transformCatch c, env
+      _catch c, env
   fin = 
     if ast.finally instanceof AST
-      transformFinally ast.finally, env
+      _finally ast.finally, env
     else
       null
   AST.make('try', body, catches, fin)
 
-register AST.get('try'), transformTry
+register AST.get('try'), _try
 
-transformImport = (ast, env) ->
+_import = (ast, env) ->
   # when we are transforming import, we are introducing bindings.
   for binding in ast.bindings 
     env.define binding.as, ast.proxy(binding)
   ast
 
-register AST.get('import'), transformImport 
+register AST.get('import'), _import 
 
-transformExport = (ast, env) ->
+_export = (ast, env) ->
   bindings = 
     for binding in ast.bindings 
       if not env.has binding.spec 
@@ -231,9 +231,9 @@ transformExport = (ast, env) ->
         AST.binding(env.get(binding.spec), binding.as)
   AST.export(bindings)
 
-register AST.get('export'), transformExport
+register AST.get('export'), _export
 
-transformLet = (ast, env) ->
+_let = (ast, env) ->
   newEnv = new SymbolTable env
   defines = 
     for define in ast.defines 
@@ -241,7 +241,7 @@ transformLet = (ast, env) ->
   body = _transform ast.body , newEnv 
   AST.let defines, body
 
-register AST.get('let'), transformLet
+register AST.get('let'), _let
 
 module.exports =
   transform: transform

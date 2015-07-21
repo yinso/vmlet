@@ -6,6 +6,6 @@ parser = require './src/parser'
 
 #env = new SymbolTable()
 parsed = parser.parse '1 + 2 * 3'
-console.log util.stringify([ parsed , parsed, parsed ])
+console.log util.prettify([ parsed , parsed, parsed ])
 
 

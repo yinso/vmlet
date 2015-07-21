@@ -127,9 +127,9 @@ cps = (ast) ->
   res = 
     switch ast.type()
       when 'task'
-        cpsTask ast
+        _task ast
       when 'toplevel', 'module'
-        cpsTopLevel ast
+        _toplevel ast
       else # this should error!
         throw new Error("CPS:unsupported_toplevel_type: #{ast}")
   res
@@ -138,16 +138,16 @@ _cpsOne = (item, contAST, cbAST) ->
   cpser = get item
   cpser item, contAST, cbAST
 
-cpsTopLevel = (ast) ->
+_toplevel = (ast) ->
   body = normalize ast.body 
   params = [ ast.moduleParam ]
   cbAST = ast.callbackParam.ref()
-  task = cpsTask AST.task(null, params, body), cbAST, cbAST
+  task = _task AST.task(null, params, body), cbAST, cbAST
   ast.clone task.body
 
-register AST.get('toplevel'), cpsTopLevel
+register AST.get('toplevel'), _toplevel
 
-cpsTask = (ast, contAST, cbAST) ->
+_task = (ast, contAST, cbAST) ->
   body = normalize ast.body
   params = [].concat(ast.params).concat(ast.callbackParam)
   # console.log '--cpTask', body
@@ -183,25 +183,25 @@ cpsTask = (ast, contAST, cbAST) ->
     )
   )
   
-register AST.get('task'), cpsTask
+register AST.get('task'), _task
 
-cpsBlock = (anf, contAST, cbAST) ->
+_block = (anf, contAST, cbAST) ->
   for i in [anf.items.length - 1 ..0] by -1
     contAST = _cpsOne anf.items[i], contAST, cbAST
   normalize contAST
 
-register AST.get('block'), cpsBlock
+register AST.get('block'), _block
 
-cpsTaskcall = (ast, contAST, cbAST) ->
+_taskcall = (ast, contAST, cbAST) ->
   args = [].concat(ast.args)
-  # console.log '--cpsTaskcall', ast, contAST, cbAST
+  # console.log '--_taskcall', ast, contAST, cbAST
   if contAST.type() == 'procedure'
     args.push contAST
   else
     args.push makeCallback contAST, cbAST
   AST.return(AST.funcall(ast.funcall, args))
 
-register AST.get('taskcall'), cpsTaskcall
+register AST.get('taskcall'), _taskcall
 
 combine = (ast, contAST) ->
   if not contAST
@@ -245,7 +245,7 @@ makeCallback = (contAST, cbAST, resParam = AST.param('res')) ->
       )])
     )
 
-cpsLocal = (ast, contAST, cbAST) ->
+_local = (ast, contAST, cbAST) ->
   #loglet.log "--cps.local", ast, contAST
   if ast.isAsync()
     _cpsOne ast.value, makeCallback(contAST, cbAST, AST.param(ast.name)), cbAST
@@ -253,9 +253,9 @@ cpsLocal = (ast, contAST, cbAST) ->
     #head = AST.local ast.name, _cpsOne(ast.value, null, null)
     combine ast, contAST
 
-register AST.get('local'), cpsLocal
+register AST.get('local'), _local
 
-cpsAssign = (ast, contAST, cbAST) ->
+_assign = (ast, contAST, cbAST) ->
   #loglet.log "--cps.assign", ast, contAST
   if ast.isAsync()
     _cpsOne ast.value, makeCallback(contAST, cbAST, AST.param(ast.name)), cbAST
@@ -263,7 +263,7 @@ cpsAssign = (ast, contAST, cbAST) ->
     head = AST.assign ast.name, _cpsOne(ast.value, null, null)
     combine head, contAST
 
-register AST.get('assign'), cpsAssign
+register AST.get('assign'), _assign
 
 makeCpsDef = (type) ->
   (ast, contAST, cbAST) ->
@@ -279,18 +279,15 @@ makeCpsDef = (type) ->
       )
       combine head, contAST
 
-#cpsTempvar = makeCpsDef('tempvar')
-#register AST.get('tempvar'), cpsTempvar
+_define = makeCpsDef('define')
+register AST.get('define'), _define
 
-cpsDefine = makeCpsDef('define')
-register AST.get('define'), cpsDefine
-
-cpsReturn = (ast, contAST, cbAST) ->
+_return = (ast, contAST, cbAST) ->
   #type = exp.type() # for dealing with none 
   #loglet.log '--cps.return', ast, contAST
   val = ast.value
   if val.type() == 'taskcall'
-    cpsTaskcall val, contAST, cbAST
+    _taskcall val, contAST, cbAST
   #else if val.type() == 'task'
     # the idea here is that we want to compile a single value...
   else
@@ -303,41 +300,41 @@ cpsReturn = (ast, contAST, cbAST) ->
       )
     )
 
-register AST.get('return'), cpsReturn
+register AST.get('return'), _return
 
-cpsIf = (ast, contAST, cbAST) ->
+_if = (ast, contAST, cbAST) ->
   AST.if(ast.cond,
     _cpsOne(ast.then, contAST, cbAST),
     _cpsOne(ast.else, contAST, cbAST)
   )
 
-register AST.get('if'), cpsIf
+register AST.get('if'), _if
 
-cpsScalar = (ast, contAST, cbAST) ->
+_scalar = (ast, contAST, cbAST) ->
   combine ast, contAST
 
-register AST.get('number'), cpsScalar
-register AST.get('bool'), cpsScalar
-register AST.get('null'), cpsScalar
-register AST.get('symbol'), cpsScalar
-register AST.get('string'), cpsScalar
-register AST.get('binary'), cpsScalar
-register AST.get('member'), cpsScalar
-register AST.get('procedure'), cpsScalar
-register AST.get('ref'), cpsScalar
-register AST.get('proxyval'), cpsScalar
-register AST.get('var'), cpsScalar
-register AST.get('funcall'), cpsScalar
-register AST.get('array'), cpsScalar
-register AST.get('object'), cpsScalar
-register AST.get('unit'), cpsScalar
-register AST.get('import'), cpsScalar
-register AST.get('export'), cpsScalar
+register AST.get('number'), _scalar
+register AST.get('bool'), _scalar
+register AST.get('null'), _scalar
+register AST.get('symbol'), _scalar
+register AST.get('string'), _scalar
+register AST.get('binary'), _scalar
+register AST.get('member'), _scalar
+register AST.get('procedure'), _scalar
+register AST.get('ref'), _scalar
+register AST.get('proxyval'), _scalar
+register AST.get('var'), _scalar
+register AST.get('funcall'), _scalar
+register AST.get('array'), _scalar
+register AST.get('object'), _scalar
+register AST.get('unit'), _scalar
+register AST.get('import'), _scalar
+register AST.get('export'), _scalar
 
-cpsThrow = (ast, contAST, cbAST) ->
+_throw = (ast, contAST, cbAST) ->
   AST.return AST.funcall(cbAST, [ ast.value ])
 
-register AST.get('throw'), cpsThrow
+register AST.get('throw'), _throw
 
 _makeErrorHandler = (catchExp, finallyExp, cbAST, name) ->
   # console.log '--cps.makeErrorHandler', catchExp?.body, finallyExp?.body, cbAST
@@ -370,9 +367,9 @@ _makeErrorHandler = (catchExp, finallyExp, cbAST, name) ->
     ])
   AST.local name, AST.procedure(undefined, [ catchExp.param , resParam ], body)
 
-cpsTry = (ast, contAST, cbAST) ->
+_try = (ast, contAST, cbAST) ->
   name = AST.symbol('__handleError', 1)
-  # console.log '--cpsTry', ast.catches[0], ast.finally
+  # console.log '--_try', ast.catches[0], ast.finally
   catchExp = 
     if ast.catches.length > 0
       ast.catches[0]
@@ -395,13 +392,13 @@ cpsTry = (ast, contAST, cbAST) ->
     ]
   )
 
-register AST.get('try'), cpsTry
+register AST.get('try'), _try
 
-cpsCatch = (ast, contAST, cbAST) ->
+_catch = (ast, contAST, cbAST) ->
   body = _cpsOne ast.body, contAST, cbAST
   AST.catch ast.param, body
 
-register AST.get('catch'), cpsCatch
+register AST.get('catch'), _catch
 
 module.exports = 
   register: register

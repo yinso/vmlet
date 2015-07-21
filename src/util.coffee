@@ -72,8 +72,13 @@ decycleObject = (obj, cache) ->
 addDupe = (item, dupe) ->
   (if typeof(item) == 'object' then Pair.cons(item, dupe) else dupe)
 
+class Nested
+  constructor: (@level) -> 
+  toString: () -> 
+    "\n" + ('  ' for i in [0...@level]).join('')
+
 nest = (level) ->
-  ['\n', ('  ' for i in [0...level]) ]
+  new Nested level
 
 prettyArray = (ary, level, dupe) ->
   [
@@ -107,9 +112,14 @@ prettyObject = (obj, level, dupe) ->
   lines = []
   lines.push '{'
   hasItem = false
+  i = 0
   for key, val of obj 
     if obj.hasOwnProperty(key)
-      lines.push prettyKeyVal(key, val, level + 1)
+      if i > 0 
+        lines.push ', ', prettyKeyVal(key, val, level + 1)
+      else
+        lines.push prettyKeyVal(key, val, level + 1)
+      i++
       hasItem = true
   if hasItem
     lines.push nest(level), '}'
@@ -133,8 +143,8 @@ pretty = (obj, level = 0, dupe = Pair.empty) ->
     else # object... 
       if obj == null 
         [ 'null' ]
-      else if obj instanceof Dupe
-        [ obj.toString() ]
+      else if isFunction(obj._pretty)
+        obj._pretty level, Pair.cons(obj, dupe)
       else if obj instanceof Array 
         prettyArray obj, level, Pair.cons(obj, dupe)
       else
@@ -144,17 +154,21 @@ flatten = (ary, res = []) ->
   for item, i in ary 
     if item instanceof Array 
       flatten item, res 
+    else if item instanceof Nested 
+      res.push item.toString()
     else
       res.push item 
   res
 
-stringify = (obj) ->
+prettify = (obj, normalize = flatten) ->
   #console.log '--stringify', obj
-  flatten(pretty(obj)).join('')
+  normalize(pretty(obj)).join('')
 
 module.exports = 
   isFunction: isFunction
   isAsync: isAsync
   isSync: isSync
-  stringify: stringify
+  prettify: prettify
+  dupe: addDupe
+  nest: nest
   

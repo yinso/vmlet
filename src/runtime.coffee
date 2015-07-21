@@ -158,8 +158,7 @@ class Runtime
     ast
   transform: (ast, env = @main.env) ->
     ast = RESOLVER.transform ast, env
-    #loglet.log '-------- Runtime.transformed =>', ast, module.env
-    #ast = CPS.transform ast
+    console.log 'resolver.transformed', util.prettify(ast)
     ast
   compile: (ast) ->
     compiled = compiler.compile ast
@@ -169,9 +168,9 @@ class Runtime
     false
   eval: (stmt, cb) ->
     if stmt.indexOf(':modules') == 0
-      return cb null, util.stringify(@modules)
+      return cb null, util.prettify(@modules)
     else if stmt.indexOf(':env') == 0
-      return cb null, util.stringify(@main)
+      return cb null, util.prettify(@main)
     try 
       ast = AST.toplevel @parse stmt 
       @evalParsed ast, @main.env, cb

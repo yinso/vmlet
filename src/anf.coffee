@@ -65,48 +65,48 @@ _transform = (ast, env, block = AST.block()) ->
   transformer = get ast 
   transformer ast, env, block
 
-transformScalar = (ast, env, block) ->
+_scalar = (ast, env, block) ->
   block.push ast
 
-register AST.get('number'), transformScalar
-register AST.get('bool'), transformScalar
-register AST.get('null'), transformScalar
-register AST.get('string'), transformScalar
-register AST.get('ref'), transformScalar
-register AST.get('unit'), transformScalar
+register AST.get('number'), _scalar
+register AST.get('bool'), _scalar
+register AST.get('null'), _scalar
+register AST.get('string'), _scalar
+register AST.get('ref'), _scalar
+register AST.get('unit'), _scalar
 
-transformProc = (ast, env, block) ->
+_proc = (ast, env, block) ->
   assign ast, env, block
-register AST.get('procedure'), transformProc
-register AST.get('task'), transformProc
+register AST.get('procedure'), _proc
+register AST.get('task'), _proc
 
-transformBinary = (ast, env, block) ->
+_binary = (ast, env, block) ->
   ##loglet.log '--anf.binary', ast
   lhs = _transform ast.lhs, env, block
   rhs = _transform ast.rhs, env, block
   assign AST.binary(ast.op, lhs, rhs), env, block
   
-register AST.get('binary'), transformBinary
+register AST.get('binary'), _binary
 
-transformIf = (ast, env, block) ->
+_if = (ast, env, block) ->
   cond = _transform ast.cond, env, block
   thenAST = _transformInner ast.then, env
   elseAST = _transformInner ast.else, env
   ##loglet.log '--anf.cond', ast, cond, thenAST, elseAST
   assign AST.if(cond, thenAST, elseAST), env, block
 
-register AST.get('if'), transformIf
+register AST.get('if'), _if
 
-transformBlock = (ast, env, block) ->
+_block = (ast, env, block) ->
   newEnv = new Environment env
   for i in [0...ast.items.length - 1]
     _transform ast.items[i], newEnv, block
   res = _transform ast.items[ast.items.length - 1], newEnv, block
   res
 
-register AST.get('block'), transformBlock
+register AST.get('block'), _block
 
-transformDefine = (ast, env, block) ->
+_define = (ast, env, block) ->
   res = transform ast.value, env
   if res.type() == 'block'
     for exp, i in res.items
@@ -117,9 +117,9 @@ transformDefine = (ast, env, block) ->
   else
     block.push AST.define(ast.name, res)
 
-register AST.get('define'), transformDefine
+register AST.get('define'), _define
 
-transformLocal = (ast, env, block) ->
+_local = (ast, env, block) ->
   res = 
     if ast.value 
       transform ast.value, env 
@@ -136,38 +136,38 @@ transformLocal = (ast, env, block) ->
     cloned = AST.local ast.name , res 
     block.push cloned 
 
-register AST.get('local'), transformLocal
+register AST.get('local'), _local
 
-transformIdentifier = (ast, env, block) ->
+_identifier = (ast, env, block) ->
   ast
   
-register AST.get('symbol'), transformIdentifier
+register AST.get('symbol'), _identifier
 
-transformObject = (ast, env, block) ->
+_object = (ast, env, block) ->
   keyVals = 
     for [key, val] in ast.value
       v = _transform val, env, block
       [key, v]
   assign AST.object(keyVals), env, block
 
-register AST.get('object'), transformObject
+register AST.get('object'), _object
 
-transformArray = (ast, env, block) ->
+_array = (ast, env, block) ->
   items = 
     for v in ast.value
       _transform v, env, block
   assign AST.array(items), env, block
 
-register AST.get('array'), transformArray
+register AST.get('array'), _array
 
-transformMember = (ast, env, block) ->
+_member = (ast, env, block) ->
   head = _transform ast.head, env, block
   assign AST.member(head, ast.key), env, block
 
-register AST.get('member'), transformMember
+register AST.get('member'), _member
 
-transformFuncall = (ast, env, block) ->
-  #loglet.log '--anf.transformFuncall', ast, block
+_funcall = (ast, env, block) ->
+  #loglet.log '--anf._funcall', ast, block
   args = 
     for arg in ast.args
       _transform arg, env, block
@@ -175,22 +175,22 @@ transformFuncall = (ast, env, block) ->
   ast = AST.funcall funcall, args
   assign ast, env, block
 
-register AST.get('funcall'), transformFuncall
+register AST.get('funcall'), _funcall
 
-transformTaskcall = (ast, env, block) ->
-  #loglet.log '--anf.transformTaskcall', ast, block
+_taskcall = (ast, env, block) ->
+  #loglet.log '--anf._taskcall', ast, block
   args = 
     for arg in ast.args
       _transform arg, env, block
   funcall = _transform ast.funcall, env, block
   assign AST.taskcall(funcall, args), env, block
 
-register AST.get('taskcall'), transformTaskcall
+register AST.get('taskcall'), _taskcall
 
-transformParam = (ast, env, block) ->
+_param = (ast, env, block) ->
   ast
   
-register AST.get('param'), transformParam
+register AST.get('param'), _param
 
 makeProc = (type) ->
   (ast, env, block) ->
@@ -204,47 +204,47 @@ makeProc = (type) ->
 #register AST.get('procedure'), Transformer.transform
 #register AST.get('task'), Transformer.transform
 
-transformThrow = (ast, env, block) ->
+_throw = (ast, env, block) ->
   exp = _transform ast.value, env, block
   block.push AST.throw exp
   
-register AST.get('throw'), transformThrow
+register AST.get('throw'), _throw
 
-transformCatch = (ast, env, block) ->
+_catch = (ast, env, block) ->
   newEnv = new Environment env
   ref = newEnv.defineParam ast.param
   body = transform ast.body, newEnv
   AST.catch ast.param, body
 
-transformFinally = (ast, env, block) ->
+_finally = (ast, env, block) ->
   newEnv = new Environment env
   body = transform ast.body, newEnv
   AST.finally body
 
-transformTry = (ast, env, block) ->
+_try = (ast, env, block) ->
   newEnv = new Environment env
   body = transform ast.body, newEnv
   catches = 
     for c in ast.catches
-      transformCatch c, env, block
+      _catch c, env, block
   fin = 
     if ast.finally instanceof AST
-      transformFinally ast.finally, env, block
+      _finally ast.finally, env, block
     else
       null
   block.push AST.try(body, catches, fin)
 
-register AST.get('try'), transformTry
+register AST.get('try'), _try
 
-transformImport = (ast, env, block) ->
+_import = (ast, env, block) ->
   for define in ast.defines()
-    #transformDefine define, env, block
+    #_define define, env, block
     block.push define
   block.push AST.unit()
 
-register AST.get('import'), transformImport
+register AST.get('import'), _import
 
-transformExport = (ast, env, block) ->
+_export = (ast, env, block) ->
   block.push ast
   #for binding in ast.bindings 
   #  ref = env.get binding.spec 
@@ -252,9 +252,9 @@ transformExport = (ast, env, block) ->
   #  #block.push ref.export()
   # AST.unit()
 
-register AST.get('export'), transformExport
+register AST.get('export'), _export
 
-transformLet = (ast, env, block) ->
+_let = (ast, env, block) ->
   newEnv = new Environment env
   defines = []
   for define in ast.defines
@@ -269,7 +269,7 @@ transformLet = (ast, env, block) ->
   else
     block.push body
 
-register AST.get('let'), transformLet
+register AST.get('let'), _let
 
 module.exports = 
   register: register

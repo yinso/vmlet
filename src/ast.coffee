@@ -1,6 +1,7 @@
 loglet = require 'loglet'
 errorlet = require 'errorlet'
 TR = require './trace'
+util = require './util'
 
 _hashCode = (str) ->
   val = 0
@@ -61,26 +62,45 @@ AST.register class SYMBOL extends AST
       "{SYM #{@value};#{@suffix}}"
     else
       "{SYM #{@value}}"
+  _pretty: (level, dupe) -> 
+    "{sym #{@value}}"
 
 runtimeID = AST.runtimeID = AST.symbol('_rt')
 moduleID = AST.moduleID = AST.symbol('_module')
 
 AST.register class STRING extends AST
   @type: 'string'
+  _pretty: (level, dupe) ->
+    "{str #{@value}}"
   
 AST.register class BOOL extends AST
   @type: 'bool'
   @TRUE = new BOOL(true)
   @FALSE = new BOOL(false)
+  _pretty: (level, dupe) ->
+    "{bool #{@value}}"
 
 AST.register class NULL extends AST
   @type: 'null'
   @NULL = new NULL(true)
   toString: () ->
     "{NULL}"
+  _pretty: (level, dupe) ->
+    "{null}"
 
 AST.register class NUMBER extends AST
   @type: 'number'
+  _pretty: (level, dupe) ->
+    "{num #{@value}}"
+
+AST.register class UNIT extends AST
+  @type: 'unit'
+  constructor: () ->
+  _equals: (v) -> true
+  toString: () ->
+    "{UNIT}"
+  _pretty: (level, dupe) ->
+    '{unit}'
 
 AST.register class MEMBER extends AST
   constructor: (@head, @key) ->
@@ -91,13 +111,16 @@ AST.register class MEMBER extends AST
     "{MEMBER #{@head} #{@key}}"
   canReduce: () ->
     @head.canReduce()
-
-AST.register class UNIT extends AST
-  @type: 'unit'
-  constructor: () ->
-  _equals: (v) -> true
-  toString: () ->
-    "{UNIT}"
+  _pretty: (level, dupe) ->
+    [
+      util.nest(level)
+      '{member '
+      @head._pretty(level, util.dupe(@, dupe))
+      ' '
+      @key._pretty(level, util.dupe(@, dupe))
+      util.nest(level)
+      '}'
+    ]
 
 AST.register class OBJECT extends AST
   @type: 'object'
@@ -115,6 +138,22 @@ AST.register class OBJECT extends AST
       if val.canReduce()
         return true
     return false
+  _pretty: (level, dupe) -> 
+    dupe = util.dupe @, dupe
+    [
+      util.nest(level)
+      '{object '
+      (for [ key , val ], i in @value
+        [
+          util.nest(level + 1)
+          (if i > 0 then ', ' else '')
+          key
+          ': '
+          val._pretty(level + 1, dupe)
+        ])
+      util.nest(level)
+      '}'
+    ]
 
 AST.register class ARRAY extends AST
   @type: 'array'
@@ -132,6 +171,20 @@ AST.register class ARRAY extends AST
       if val.canReduce()
         return true
     return false
+  _pretty: (level, dupe) ->
+    dupe = util.dupe @, dupe
+    [ 
+      util.nest(level)
+      '{array'
+      (for item, i in @value
+        [
+          (if i > 0 then ', ' else '')
+          item._pretty(level + 1, dupe)
+        ])
+      util.nest(level)
+      '}'
+    ]
+
 
 AST.register class BLOCK extends AST
   constructor: (@items = []) ->
@@ -163,6 +216,18 @@ AST.register class BLOCK extends AST
     @items.push item # this line causes range error???
     item
   canReduce: () -> true # this is actually not necessarily true...!!!
+  _pretty: (level, dupe) ->
+    dupe = util.dupe @, dupe 
+    [ 
+      util.nest(level)
+      '{block ' 
+      (for item, i in @items 
+        [
+          item._pretty(level + 1, dupe)
+        ])
+      util.nest(level)
+      '}'
+    ]
 
 AST.register class ASSIGN extends AST
   @type: 'assign'
@@ -174,6 +239,18 @@ AST.register class ASSIGN extends AST
   toString: () ->
     "{ASSIGN #{@name} #{@value}}"
   canReduce: () -> true # this is actually not necessarily true...!!!
+  _pretty: (level, dupe) -> 
+    dupe = util.dupe @, dupe 
+    [
+      util.nest(level)
+      '{assign '
+      @name._pretty(level + 1, dupe)
+      ' = '
+      @value._pretty(level + 1, dupe)
+      util.nest(level)
+      '}'
+    ]
+
 
 AST.register class DEFINE extends AST
   @type: 'define'
@@ -185,6 +262,17 @@ AST.register class DEFINE extends AST
   toString: () ->
     "{DEFINE #{@name} #{@value}}"
   canReduce: () -> true # this is actually not necessarily true...!!!
+  _pretty: (level, dupe) -> 
+    dupe = util.dupe @, dupe 
+    [
+      util.nest(level)
+      '{define '
+      @name._pretty(level + 1, dupe)
+      ' = '
+      @value._pretty(level + 1, dupe)
+      util.nest(level)
+      '}'
+    ]
 
 AST.register class LOCAL extends AST 
   @type: 'local'
@@ -200,6 +288,22 @@ AST.register class LOCAL extends AST
   assign: (value = @value) ->
     AST.assign @name, value
   canReduce: () -> true # this is actually not necessarily true...!!!
+  _pretty: (level, dupe) -> 
+    dupe = util.dupe @, dupe 
+    [
+      util.nest(level)
+      '{local '
+      @name._pretty(level + 1, dupe)
+      if @value  
+        [
+          ' = '
+          @value._pretty(level + 1, dupe)
+        ]
+      else
+        ''
+      util.nest(level)
+      '}'
+    ]
 
 # REF is used to determine whether or not we are referring to exactly the same thing.
 AST.register class REF extends AST 
@@ -228,21 +332,13 @@ AST.register class REF extends AST
     AST.export [ AST.binding(@, @as) ]
   normalName: () ->
     @name
-
-# temp var should really just be a way to coin a particular reference - the reference itself should have 
-# automatic names...
-
-AST.register class TEMPVAR extends AST
-  @type: 'tempvar'
-  constructor: (@name, @value, @suffix = '') ->
-  _equals: (v) ->
-    @name == v.name and @value.equals(v.value)
-  isAsync: () ->
-    @value.isAsync()
-  normalized: () ->
-    @name + if @suffix then "$#{@suffix}" else ''
-  toString: () ->
-    "{TEMPVAR #{@normalized()} #{@value}}"
+  _pretty: (level, dupe) -> 
+    [
+      '{ref '
+      (if @isDefine then '!' else '')
+      @name._pretty(level, dupe)
+      '}'
+    ]
 
 # PROXYVAL 
 # used to hold special transformation logic. 
@@ -251,6 +347,12 @@ AST.register class TEMPVAR extends AST
 AST.register class PROXYVAL extends AST 
   @type: 'proxyval'
   constructor: (@name, @compiler) ->
+  _pretty: (level, dupe) ->
+    [
+      '{proxyval '
+      @name._pretty(level, dupe)
+      '}'
+    ]
 
 AST.register class PARAM extends AST
   constructor: (@name, @paramType = null, @default = null) ->
@@ -282,6 +384,12 @@ AST.register class PARAM extends AST
       "{PARAM #{@name} = #{@default}}"
     else 
       "{PARAM #{@name}}"
+  _pretty: (level, dupe) -> 
+    [
+      '{param '
+      @name._pretty(level, dupe)
+      '}'
+    ]
 
 AST.register class PROCEDURE extends AST
   @type: 'procedure'
@@ -310,6 +418,19 @@ AST.register class PROCEDURE extends AST
       @buffer.push " : ", @returns.toString()
     buffer.push "}"
     buffer.join ''
+  _pretty: (level, dupe) ->
+    dupe = util.dupe @, dupe 
+    [
+      util.nest(level)
+      '{proc '
+      (if @name then @name._pretty(level + 1, dupe) else '')
+      ' ('
+      ([ ' ' , param._pretty(level + 1, dupe) ] for param in @params) 
+      ') '
+      @body._pretty(level + 1, dupe)
+      util.nest(level)
+      '}'
+    ]
 
 # having LET expression is basically the same as 
 AST.register class LET extends AST 
@@ -319,6 +440,21 @@ AST.register class LET extends AST
     @ == v
   toString: () -> 
     "{LET #{@defines} #{@body}}"
+  _pretty: (level, dupe) -> 
+    dupe = util.dupe @, dupe
+    [
+      util.nest(level)
+      '{let '
+      [
+        '('
+        (define._pretty(level + 1, dupe) for define in @defines)
+        ')'
+      ]
+      ' = '
+      @body._pretty(level + 1, dupe)  
+      util.nest(level)
+      '}'
+    ]
 
 AST.register class TASK extends AST
   @type: 'task'
@@ -337,6 +473,19 @@ AST.register class TASK extends AST
     @body.isAsync()
   toString: () ->
     "{TASK #{@name} #{@params} #{@body} #{@returns}}"
+  _pretty: (level, dupe) ->
+    dupe = util.dupe @, dupe
+    [
+      util.nest(level)
+      '{task '
+      (if @name then @name._pretty(level + 1, dupe) else '')
+      ' ('
+      ([ param._pretty(level + 1, dupe) , ' ' ] for param in @params)
+      ') '
+      @body._pretty(level + 1, dupe)
+      util.nest(level)
+      '}'
+    ]
 
 
 AST.register class IF extends AST
@@ -349,6 +498,19 @@ AST.register class IF extends AST
   toString: () ->
     "{IF #{@cond} #{@then} #{@else}}"
   canReduce: () -> true # this is actually not necessarily true...!!!
+  _pretty: (level, dupe) -> 
+    dupe = util.dupe @, dupe
+    [
+      util.nest(level)
+      '{if '
+      @cond._pretty(level + 1, dupe)
+      ' '
+      @then._pretty(level + 1, dupe)
+      ' '
+      @else._pretty(level + 1, dupe)
+      util.nest(level)
+      '}'
+    ]
 
 AST.register class FUNCALL extends AST
   @type: 'funcall'
@@ -375,6 +537,21 @@ AST.register class FUNCALL extends AST
       if arg.canReduce()
         return true
     return false
+  _pretty: (level, dupe) -> 
+    dupe = util.dupe @, dupe
+    [
+      util.nest(level)
+      '{funcall '
+        @funcall._pretty(level + 1, dupe)
+        ' '
+        (for arg, i in @args
+          [
+            if i > 0 then ', ' else ''
+            arg._pretty(level + 1, dupe)
+          ])
+      util.nest(level)
+      '}'
+    ]
 
 AST.register class TASKCALL extends FUNCALL
   @type: 'taskcall'
@@ -382,6 +559,21 @@ AST.register class TASKCALL extends FUNCALL
     true
   toString: () ->
     "{TASKCALL #{@funcall} #{@args}}"
+  _pretty: (level, dupe) ->
+    dupe = util.dupe @, dupe
+    [
+      util.nest(level)
+      '{taskcall '
+      @funcall._pretty(level + 1, dupe)
+      ' '
+      (for arg, i in @args
+        [
+          if i > 0 then ', ' else ''
+          arg._pretty(level + 1, dupe)
+        ])
+      util.nest(level)
+      '}'
+    ]
 
 AST.register class RETURN extends AST
   @type: 'return'
@@ -389,6 +581,13 @@ AST.register class RETURN extends AST
     @value.isAsync()
   canReduce: () ->
     @value.canReduce()
+  _pretty: (level, dupe) -> 
+    dupe = util.dupe @, dupe
+    [
+      '{return '
+      @value._pretty(level + 1, dupe)
+      '}'
+    ]
 
 AST.register class BINARY extends AST
   @type: 'binary'
@@ -399,11 +598,29 @@ AST.register class BINARY extends AST
     "{#{@op} #{@lhs} #{@rhs}}"
   canReduce: () ->
     @lhs.canReduce() or @rhs.canReduce()
+  _pretty: (level, dupe) ->
+    dupe = util.dupe @, dupe 
+    [
+      util.nest(level)
+      "{#{@op} "
+      @lhs._pretty(level + 1, dupe)
+      ' '
+      @rhs._pretty(level + 1, dupe)
+      util.nest(level)
+      '}'
+    ]
 
 AST.register class THROW extends AST
   @type: 'throw'
   canReduce: () ->
     @value.canReduce()
+  _pretty: (level, dupe) ->
+    dupe = util.dupe @, dupe 
+    [
+      '{throw '
+      @value._pretty(level + 1, dupe)
+      '}'
+    ]
 
 AST.register class CATCH extends AST
   @type: 'catch'
@@ -415,6 +632,17 @@ AST.register class CATCH extends AST
   toString: () ->
     "{CATCH #{@param} #{@body}}"
   canReduce: () -> true
+  _pretty: (level, dupe) ->
+    dupe = util.dupe @, dupe 
+    [
+      util.nest(level)
+      '{catch '
+      @param._pretty(level + 1 , dupe)
+      ' '
+      @body._pretty(level + 1, dupe)
+      util.nest(level)
+      '}'
+    ]
 
 AST.register class FINALLY extends AST
   @type: 'finally'
@@ -427,6 +655,15 @@ AST.register class FINALLY extends AST
     "{FINALLY #{@body}}"
   canReduce: () -> 
     @body.canReduce()
+  _pretty: (level, dupe) -> 
+    dupe = util.dupe @, dupe 
+    [
+      util.nest(level)
+      '{finally '
+      @body._pretty(level + 1, dupe)
+      util.nest(level)
+      '}'
+    ]
 
 AST.register class TRY extends AST 
   @type: 'try'
@@ -458,6 +695,19 @@ AST.register class TRY extends AST
   toString: () ->
     "{TRY #{@body} #{@catches} #{@finally}}"
   canReduce: () -> true
+  _pretty: (level, dupe) ->
+    dupe = util.dupe @, dupe
+    [
+      util.nest(level)
+      '{try '
+      @body._pretty(level + 1, dupe)
+      ' '
+      ([ c._pretty(level + 1, dupe) , ' ' ] for c in @catches)
+      ' '
+      (if @finally then @finally._dupe(level + 1, dupe) else '')
+      util.nest(level)
+      '}'
+    ]
 
 AST.register class TOPLEVEL extends AST 
   @type: 'toplevel'
@@ -513,8 +763,15 @@ AST.register class TOPLEVEL extends AST
   _equals: (v) ->
     @body.equals v.body 
   isAsync: () -> true 
-  toString: () ->
-    "{TOPLEVEL #{@body}}"
+  _pretty: (level, dupe) -> 
+    dupe = util.dupe @, dupe 
+    [
+      util.nest(level)
+      '{toplevel '
+      @body._pretty(level + 1, dupe)
+      util.nest(level)
+      '}'
+    ]
 
 AST.register class MODULE extends TOPLEVEL
   @type: 'module'
@@ -537,6 +794,14 @@ AST.register class MODULE extends TOPLEVEL
     module.spec = @spec
     module.id = @normalizeSpec @spec
     module
+  _pretty: (level, dupe) -> 
+    [
+      util.nest(level)
+      "{module #{@spec._pretty(level, dupe)} "
+      @body._pretty(level + 1, util.dupe(@, dupe))
+      util.nest(level)
+      '}'
+    ]
   toString: () ->
     "{MODULE #{@body}}"
 
@@ -550,6 +815,17 @@ AST.register class BINDING extends AST
       "{AS #{@spec} #{@as}}"
     else
       "{#{@spec}}"
+  _pretty: (level, dupe) -> 
+    dupe = util.dupe @, dupe
+    [
+      util.nest(level)
+      '{as '
+      @spec._pretty(level + 1, dupe)
+      ' '
+      @as._pretty(level + 1, dupe)
+      util.nest(level)
+      '}'
+    ]
 
 AST.register class IMPORT extends AST
   @type: 'import'
@@ -570,6 +846,17 @@ AST.register class IMPORT extends AST
     AST.proxyval binding.as, AST.funcall(AST.member(moduleID, AST.symbol('get')), [ AST.string(binding.as.value)])
   importSpec: () ->
     @spec.value
+  _pretty: (level, dupe) ->
+    dupe = util.dupe @, dupe
+    [
+      util.nest(level)
+      "{import "
+      @spec.toString()
+      ' '
+      ([ b._pretty(level + 1, dupe) , ' ' ] for b in @bindings)
+      util.nest(level)
+      '}'
+    ]
 
 AST.register class EXPORT extends AST 
   @type: 'export'
@@ -577,6 +864,15 @@ AST.register class EXPORT extends AST
   toString: () ->
     "{EXPORT #{@bindings}}"
   isAsync: () -> false
+  _pretty: (level, dupe) ->
+    dupe = util.dupe @, dupe
+    [
+      util.nest(level)
+      "{export "
+      ([ b._pretty(level + 1, dupe) , ' ' ] for b in @bindings)
+      util.nest(level)
+      '}'
+    ]
 
 ###
 
@@ -591,6 +887,12 @@ AST.register class VAR extends AST
   constructor: (@name) ->
   toString: () -> 
     "{VAR #{@name}}"
+  _pretty: (level, dupe) -> 
+    [
+      '{var '
+      @name._pretty(level + 1, dupe)
+      '}'
+    ]
 
 AST.register class WHILE extends AST
   @type: 'while'
@@ -601,33 +903,79 @@ AST.register class WHILE extends AST
     @cond.isAsync() or @block.isAsync()
   toString: () ->
     "{WHILE #{@cond} #{@block}}"
+  _pretty: (level, dupe) -> 
+    dupe = util.dupe @, dupe
+    [
+      util.nest(level)
+      '{while '
+      @cond._pretty(level + 1, dupe)
+      ' '
+      @block._pretty(level + 1, dupe)
+      util.nest(level)
+      '}'
+    ]
 
 AST.register class CONTINUE extends AST
   @type: 'continue'
   toString: () -> 
     "{CONTINUE}"
+  _pretty: (level, dupe) -> 
+    "{continue}"
 
 AST.register class BREAK extends AST
   @type: 'break'
   toString: () -> 
     "{BREAK}"
+  _pretty: (level, dupe) -> 
+    "{break}"
 
 AST.register class SWITCH extends AST
   @type: 'switch'
   constructor: (@cond, @cases = []) ->
   toString: () ->
     "{SWITCH #{@cond} #{@cases}}"
+  _pretty: (level, dupe) -> 
+    dupe = util.dupe @, dupe
+    [
+      util.nest(level)
+      '{switch '
+      @cond._pretty(level + 1, dupe)
+      ' '
+      ([ c._pretty(level + 1, dupe), ' '] for c in @cases)
+      util.nest(level)
+      '}'
+    ]
 
 AST.register class CASE extends AST
   @type: 'case'
   constructor: (@cond, @exp) ->
   toString: () ->
     "{CASE #{@cond} #{@exp}}"
+  _pretty: (level, dupe) -> 
+    dupe = util.dupe @, dupe 
+    [
+      util.nest(level)
+      '{case '
+      @cond._pretty(level + 1, dupe)
+      ': '
+      @exp._pretty(level + 1, dupe)
+      util.nest(level)
+      '}'
+    ]
 
 AST.register class DEFAULTCASE extends AST
   @type: 'defaultCase'
   constructor: (@exp) ->
   toString: () ->
     "{DEFAULT #{@exp}}"
+  _pretty: (level, dupe) -> 
+    dupe = util.dupe @, dupe 
+    [
+      util.nest(level)
+      '{default: '
+      @exp._pretty(level + 1, dupe)
+      util.nest(level)
+      '}'
+    ]
 
 module.exports = AST
