@@ -36,7 +36,6 @@ transform = (ast) ->
   res = isTailRecursive ast.body, ast
   if res 
     trans = tailRecursive(ast)
-    console.log '-- TCO.recursive', trans
     trans
   else
     ast
@@ -60,7 +59,6 @@ tailRecursive = (proc) ->
   proc 
 
 normalize = (ast, proc, labelVar) -> 
-  console.log '--normalize', ast
   switch ast.type()
     when 'block'
       items = 
@@ -94,7 +92,6 @@ normalize = (ast, proc, labelVar) ->
       ast
 
 _goto = (ast, proc, labelVar) -> 
-  console.log '--goto', ast.args, proc.params, labelVar
   # func(arg1, ... )
   # ==> 
   # p1 = arg1
@@ -150,10 +147,6 @@ isTailCall = (ast, proc) ->
       # 2) defined within the module 
       # 3) defined outside of the module. 
       funcall = ast.funcall
-      if funcall.isDefine
-        console.log '-- this is a module level variable', funcall
-      else
-        console.log '-- this is an in function variable', funcall
       true
     when 'if' # only one of them needs to be 
       isTailCall(ast.then) or isTailCall(ast.else)

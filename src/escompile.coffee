@@ -34,12 +34,19 @@ class Environment
     @inner = new Hashmap
       hashCode: hashCode
   has: (key) ->
-    @inner.has key
+    if @inner.has key
+      true 
+    else if @prev 
+      @prev.has key 
+    else 
+      false
   get: (key) ->
-    if not @has key
-      throw new Error("escompile:unknown_identifier: #{key}")
-    else
+    if @inner.has key
       @inner.get key
+    else if @prev
+      @prev.get key 
+    else
+      throw new Error("escompile:unknown_identifier: #{key}")
   alias: (key) -> 
     if @has key 
       @get key
@@ -138,7 +145,7 @@ _define = (ast, env) ->
         throw new Error("escompile.define:unknown_name_type: #{ast.name}")
   value = 
     esnode.funcall esnode.member(_compile(AST.moduleID, env), esnode.identifier('define')),
-      [ name , _compile(ast.value, env) ]
+      [ name , _compile(ast.value, new Environment(env)) ]
   id = 
     switch ast.name.type()
       when 'ref'
@@ -309,7 +316,6 @@ _case = (ast, env) ->
         [
           _compile(item, env)
         ]
-  console.log 'escompile.case', body, ast.exp 
   esnode.case _compile(ast.cond, env), body
 
 register AST.get('case'), _case 
@@ -327,7 +333,7 @@ register AST.get('continue'), _continue
 _break = (ast, env) ->
   esnode.break()
 
-register AST.get('break'), _continue
+register AST.get('break'), _break
 
 module.exports = 
   compile: compile
