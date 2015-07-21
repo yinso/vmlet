@@ -54,6 +54,8 @@ AST.register class SYMBOL extends AST
     new @constructor @value, if @suffix == undefined then 1 else @suffix + 1 
   clone: () ->
     new @constructor @value, if @suffix == undefined then 1 else @suffix + 1 
+  literal: () -> 
+    AST.string(@value)
   toString: () ->
     if @suffix
       "{SYM #{@value};#{@suffix}}"
@@ -202,7 +204,7 @@ AST.register class LOCAL extends AST
 # REF is used to determine whether or not we are referring to exactly the same thing.
 AST.register class REF extends AST 
   @type: 'ref'
-  constructor: (@name, @value) ->
+  constructor: (@name, @value, @level) ->
     @isDefine = false
   _equals: (v) -> @ == v
   isAsync: () -> false
@@ -219,7 +221,7 @@ AST.register class REF extends AST
     else
       AST.local @, @value
   clone: () ->
-    AST.ref @name.clone(), @value
+    AST.ref @name.clone(), @value, @level
   assign: () ->
     AST.assign @, @value
   export: (@as = null ) ->
@@ -405,7 +407,7 @@ AST.register class THROW extends AST
 
 AST.register class CATCH extends AST
   @type: 'catch'
-  constructor: (@param, @body) ->
+  constructor: (@param = AST.param(AST.symbol('e')), @body = AST.block([AST.throw(@param.name)])) ->
   _equals: (v) ->
     @param.equals(v.param) and @body.equals(v.body)
   isAsync: () ->
@@ -604,6 +606,11 @@ AST.register class CONTINUE extends AST
   @type: 'continue'
   toString: () -> 
     "{CONTINUE}"
+
+AST.register class BREAK extends AST
+  @type: 'break'
+  toString: () -> 
+    "{BREAK}"
 
 AST.register class SWITCH extends AST
   @type: 'switch'

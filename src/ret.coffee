@@ -200,7 +200,9 @@ T.register 'procedure', ($p) ->
       body
     else
       AST.block [ body ]
-  TRE.transform AST.procedure $name, $params, body, $returns
+  # this make sure that we don't lose the references that points to this procedure.
+  $p.body = body
+  TRE.transform $p
 
 T.register 'task', ($p) -> 
   [ $p.name , $p.params, $p.body , $p.returns ]

@@ -2,6 +2,8 @@
 # tail recursion elimination (self-calling).
 # 
 AST = require './ast'
+Environment = require './symboltable'
+TR = require './trace'
 
 # to convert a function into its recursion equivalent (we will handle declared self-recursion and mutual recursion at 
 # this level, and no async tco elimination). it takes the following steps.
@@ -21,9 +23,150 @@ AST = require './ast'
 # maybe I need to get rid of my reliance on REF now that I have removed checking against environment everywhere else but 
 # resolver...
 
+# a couple of problems... do I want to go ahead and normalize a simple funcall? 
+# let's try it anyway so we can at least see that it works... 
+
+# how do I solve this problem? 
+# 
+
+
 transform = (ast) ->
-  console.log 'TRE.transform', ast 
-  ast
+  #console.log 'TRE.transform', ast 
+  # first thing we need to do is to determine if which of the references are defined within the procedure itself. 
+  res = isTailRecursive ast.body, ast
+  if res 
+    trans = tailRecursive(ast)
+    console.log '-- TCO.recursive', trans
+    trans
+  else
+    ast
+
+tailRecursive = (proc) -> 
+  labelVar = AST.symbol('label')
+  labelName = proc.name.literal()
+  labelDef = AST.local labelVar, labelName
+  body = normalize proc.body , proc, labelVar
+  whileBlock = AST.while AST.bool(true), 
+    AST.block [
+      AST.switch labelVar, [
+        AST.case(labelName, body)
+      ]
+    ]
+  proc.body = 
+    AST.block [
+      labelDef 
+      whileBlock
+    ]
+  proc 
+
+normalize = (ast, proc, labelVar) -> 
+  console.log '--normalize', ast
+  switch ast.type()
+    when 'block'
+      items = 
+        for item, i in ast.items 
+          if i < ast.items.length - 1
+            item 
+          else
+            normalize item, proc, labelVar 
+      AST.block items 
+    when 'return'
+      value = normalize(ast.value, proc, labelVar)
+      if value.type() == 'block'
+        value 
+      else
+        AST.return value
+    when 'if'
+      thenAST = normalize ast.then, proc, labelVar 
+      elseAST = normalize ast.else, proc, labelVar
+      AST.if ast.cond, thenAST, elseAST 
+    when 'funcall' # this is the fun part.
+      funcall = ast.funcall 
+      switch funcall.type()
+        when 'ref'
+          if funcall.value == proc
+            _goto ast, proc, labelVar
+          else
+            ast
+        else
+          ast
+    else # don't know what else would be here for now... so keep going!
+      ast
+
+_goto = (ast, proc, labelVar) -> 
+  console.log '--goto', ast.args, proc.params, labelVar
+  # func(arg1, ... )
+  # ==> 
+  # p1 = arg1
+  # p2 = arg2 ... 
+  # label = "funcName"
+  # continue
+  labelName = proc.name.literal()
+  items = []
+  tempVars = 
+    for param, i in proc.params 
+      param.name.clone()
+  for arg, i in ast.args 
+    items.push AST.local(tempVars[i], arg)
+  for arg, i in ast.args 
+    items.push AST.assign(proc.params[i].ref(), tempVars[i])
+  items.push AST.assign(labelVar, labelName)
+  items.push AST.break()
+  AST.block items
+
+isTailRecursive = (ast, proc) ->
+  switch ast.type()
+    when 'block'
+      isTailRecursive ast.items[ast.items.length - 1], proc
+    when 'if'
+      isTailRecursive(ast.then, proc) or isTailRecursive(ast.else, proc)
+    when 'return'
+      isTailRecursive ast.value, proc
+    when 'funcall'
+      funcall = ast.funcall 
+      switch funcall.type()
+        when 'ref'
+          return funcall.value == proc
+        when 'symbol'
+          return funcall == proc.name
+        else
+          return false
+    else
+      false
+
+isTailCall = (ast, proc) ->
+  switch ast.type()
+    when 'procedure'
+      isTailCall ast.body
+    when 'block'
+      isTailCall ast.items[ast.items.length - 1]
+    when 'return'
+      isTailCall ast.value
+    when 'funcall'
+      # when we get here we now need to determine if it's calling a function that's defined within the scope of the 
+      # module... 
+      # this is the important part... 
+      # 1) defined within the function.
+      # 2) defined within the module 
+      # 3) defined outside of the module. 
+      funcall = ast.funcall
+      if funcall.isDefine
+        console.log '-- this is a module level variable', funcall
+      else
+        console.log '-- this is an in function variable', funcall
+      true
+    when 'if' # only one of them needs to be 
+      isTailCall(ast.then) or isTailCall(ast.else)
+    else
+      false
+
+determineRefLocation = (ast) -> 
+  # how do we determine ref location? have we been tracking them as we go? 
+  
+
+normalizeRefs = (ast) -> 
+  # we are dealing with a procedure, so we have to deal with the 
+  
   
 module.exports = 
   transform: transform

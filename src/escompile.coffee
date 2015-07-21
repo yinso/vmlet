@@ -289,6 +289,46 @@ _export = (ast, env) ->
 
 register AST.get('export'), _export
 
+_while = (ast, env) -> 
+  esnode.while _compile(ast.cond, env), _compile(ast.block, env)
+
+register AST.get('while'), _while 
+
+_switch = (ast, env) -> 
+  esnode.switch _compile(ast.cond, env), (_compile(c, env) for c in ast.cases)
+
+register AST.get('switch'), _switch 
+
+_case = (ast, env) -> 
+  body = 
+    switch ast.exp.type()
+      when 'block'
+        for item, i in ast.exp.items
+          _compile(item, env)
+      else
+        [
+          _compile(item, env)
+        ]
+  console.log 'escompile.case', body, ast.exp 
+  esnode.case _compile(ast.cond, env), body
+
+register AST.get('case'), _case 
+
+_default = (ast, env) -> 
+  esnode.defaultCase _compile(ast.exp, env)
+
+register AST.get('defaultCase'), _default 
+
+_continue = (ast, env) -> 
+  esnode.continue()
+
+register AST.get('continue'), _continue
+
+_break = (ast, env) ->
+  esnode.break()
+
+register AST.get('break'), _continue
+
 module.exports = 
   compile: compile
   register: register

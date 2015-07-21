@@ -42,11 +42,11 @@ class SymbolTable
     if @_has sym
       throw new Error("duplicate_identifier: #{sym}")
     else if @prev?.has sym 
-      ref = AST.ref(sym.nested(), val)
+      ref = AST.ref(sym.nested(), val, @level())
       @inner[sym.value] = ref 
       ref
     else
-      ref = AST.ref(sym, val)
+      ref = AST.ref(sym, val, @level())
       @inner[sym.value] = ref
       ref
   gensym: (sym = null) ->

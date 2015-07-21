@@ -123,11 +123,6 @@ get = (ast) ->
 override = (ast, cps) ->
   types[ast.type] = cps
 
-runtimeParam = AST.param(AST.runtimeID)
-callbackParam = AST.param(AST.symbol('_done'))
-errorParam = AST.param(AST.symbol('e'))
-cbAST = callbackParam.ref()
-
 cps = (ast) ->
   res = 
     switch ast.type()
@@ -137,7 +132,6 @@ cps = (ast) ->
         cpsTopLevel ast
       else # this should error!
         throw new Error("CPS:unsupported_toplevel_type: #{ast}")
-  # console.log '-------- Runtime.cpsed =>', ast
   res
 
 _cpsOne = (item, contAST, cbAST) ->
@@ -155,7 +149,7 @@ register AST.get('toplevel'), cpsTopLevel
 
 cpsTask = (ast, contAST, cbAST) ->
   body = normalize ast.body
-  params = [].concat(ast.params).concat(callbackParam)
+  params = [].concat(ast.params).concat(ast.callbackParam)
   # console.log '--cpTask', body
   body = 
     if body.items[0].type() == 'try'
@@ -165,13 +159,13 @@ cpsTask = (ast, contAST, cbAST) ->
         _cpsOne(body, cbAST, cbAST), 
         [ 
           AST.catch(
-            errorParam, 
+            ast.errorParam, 
             AST.block(
               [
                 AST.return(AST.funcall(
                   cbAST, 
                   [ 
-                    errorParam.ref()
+                    ast.errorParam.ref()
                   ]))
               ]
             )
@@ -348,15 +342,16 @@ register AST.get('throw'), cpsThrow
 _makeErrorHandler = (catchExp, finallyExp, cbAST, name) ->
   # console.log '--cps.makeErrorHandler', catchExp?.body, finallyExp?.body, cbAST
   catchBody = _cpsOne catchExp.body, cbAST, cbAST
+  errParam = catchExp.param
   resParam = AST.param(AST.symbol('res'))
-  okReturnExp = AST.return(AST.funcall(cbAST, [ catchExp.param.name , resParam.name ]))
+  okReturnExp = AST.return(AST.funcall(cbAST, [ errParam.name , resParam.name ]))
   errorBody = 
     if finallyExp 
       AST.try(
         _cpsOne(finallyExp.body, catchBody, catchBody)
         [ 
           AST.catch(
-            catchExp.param,
+            errParam,
             AST.block([
               okReturnExp 
             ])
@@ -368,7 +363,7 @@ _makeErrorHandler = (catchExp, finallyExp, cbAST, name) ->
   body = 
     AST.block([
       AST.if(
-        catchExp.param.name
+        errParam.name
         errorBody
         okReturnExp
       )
@@ -382,25 +377,21 @@ cpsTry = (ast, contAST, cbAST) ->
     if ast.catches.length > 0
       ast.catches[0]
     else
-      AST.catch(
-        errorParam
-        AST.block([
-          AST.throw(errorParam.name)
-        ])
-      )
+      # this thing creates a new parameter... we need a way to create parameters without 
+      # having the parameter being global... 
+      AST.catch()
   errorAST = _makeErrorHandler catchExp, ast.finally, cbAST, name
   cbAST = name
   bodyAST = _cpsOne ast.body, contAST, cbAST
   tryBody = combine errorAST, bodyAST 
+  finalCatch = AST.catch()
+  finalCatch.body = AST.block [
+      AST.return(AST.funcall(errorAST.name, [ finalCatch.param.name ]))
+    ]
   AST.try(
     tryBody
     [ 
-      AST.catch(
-        errorParam
-        AST.block([
-          AST.return(AST.funcall(errorAST.name, [ errorParam.name ]))
-        ])
-      )
+      finalCatch
     ]
   )
 

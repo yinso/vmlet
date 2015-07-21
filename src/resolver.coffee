@@ -71,9 +71,7 @@ transformBlock = (ast, env) ->
   # first pull out all of the defines. 
   for item, i in ast.items 
     if item.type() == 'define'
-      if env.hasCurrent item.name
-        throw new Error("duplicate_define: #{item.name}")
-      env.define item.name
+      transformDefineName item, env
   items = 
     for item, i in ast.items
       if item.type() == 'define'
@@ -89,19 +87,22 @@ transformTopLevel = (ast, env) ->
 
 register AST.get('toplevel'), transformTopLevel
 
+transformDefineName = (ast, env) ->
+  if env.hasCurrent ast.name 
+    throw new Error("duplicate_define: #{ast.name}")
+  ref = env.define ast.name 
+  if env.level() <= 1 
+    ref.isDefine = true 
+
 transformDefineVal = (ast, env) ->
   # at this time we assume define exists... 
   ref = env.get ast.name 
   res = _transform  ast.value, env 
   ref.value = res 
-  if env.level() <= 1 
-    ref.isDefine = true 
   ref.define()
 
 transformDefine = tr.trace 'resolver.define', (ast, env) ->
-  if env.hasCurrent ast.name 
-    throw new Error("duplicate_define: #{ast.name}")
-  ref = env.define ast.name 
+  transformDefineName ast, env
   transformDefineVal ast, env
 
 register AST.get('define'), transformDefine
