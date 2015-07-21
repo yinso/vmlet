@@ -158,7 +158,7 @@ class Runtime
     ast
   transform: (ast, env = @main.env) ->
     ast = RESOLVER.transform ast, env
-    console.log 'resolver.transformed', util.prettify(ast)
+    #console.log 'resolver.transformed', ast
     ast
   compile: (ast) ->
     compiled = compiler.compile ast

@@ -42,7 +42,7 @@ class AST
   inspect: () ->
     @toString()
   toString: () ->
-    "{#{@constructor.name} #{@value}}"
+    util.prettify @
   canReduce: () ->
     false
 
@@ -57,11 +57,6 @@ AST.register class SYMBOL extends AST
     new @constructor @value, if @suffix == undefined then 1 else @suffix + 1 
   literal: () -> 
     AST.string(@value)
-  toString: () ->
-    if @suffix
-      "{SYM #{@value};#{@suffix}}"
-    else
-      "{SYM #{@value}}"
   _pretty: (level, dupe) -> 
     "{sym #{@value}}"
 
@@ -83,8 +78,6 @@ AST.register class BOOL extends AST
 AST.register class NULL extends AST
   @type: 'null'
   @NULL = new NULL(true)
-  toString: () ->
-    "{NULL}"
   _pretty: (level, dupe) ->
     "{null}"
 
@@ -97,8 +90,6 @@ AST.register class UNIT extends AST
   @type: 'unit'
   constructor: () ->
   _equals: (v) -> true
-  toString: () ->
-    "{UNIT}"
   _pretty: (level, dupe) ->
     '{unit}'
 
@@ -107,8 +98,6 @@ AST.register class MEMBER extends AST
   @type: 'member'
   _equals: (v) -> 
     @head.equals(v.head) and @key == v.key
-  toString: () ->
-    "{MEMBER #{@head} #{@key}}"
   canReduce: () ->
     @head.canReduce()
   _pretty: (level, dupe) ->
@@ -205,13 +194,6 @@ AST.register class BLOCK extends AST
       if item.isAsync()
         true
     false
-  toString: () ->
-    buffer = []
-    buffer.push '{BLOCK'
-    for item in @items
-      buffer.push item.toString()
-    buffer.push '}'
-    buffer.join '\n'
   push: (item) ->
     @items.push item # this line causes range error???
     item
@@ -236,8 +218,6 @@ AST.register class ASSIGN extends AST
     @name == v.name and @value.equals(v.value)
   isAsync: () ->
     @value.isAsync()
-  toString: () ->
-    "{ASSIGN #{@name} #{@value}}"
   canReduce: () -> true # this is actually not necessarily true...!!!
   _pretty: (level, dupe) -> 
     dupe = util.dupe @, dupe 
@@ -259,8 +239,6 @@ AST.register class DEFINE extends AST
     @name == v.name and @value.equals(v.value)
   isAsync: () ->
     @value.isAsync()
-  toString: () ->
-    "{DEFINE #{@name} #{@value}}"
   canReduce: () -> true # this is actually not necessarily true...!!!
   _pretty: (level, dupe) -> 
     dupe = util.dupe @, dupe 
@@ -281,8 +259,6 @@ AST.register class LOCAL extends AST
     @name == v.name and @value.equals(v.value)
   isAsync: () ->
     @value?.isAsync() or false
-  toString: () ->
-    "{LOCAL #{@name} #{@value}}"
   noInit: () ->
     AST.local @name
   assign: (value = @value) ->
@@ -314,11 +290,6 @@ AST.register class REF extends AST
   isAsync: () -> false
   isPlaceholder: () ->
     not @value
-  toString: () ->
-    if @isDefine
-      "{REF !#{@name}}"
-    else
-      "{REF #{@name}}"
   define: () ->
     if @isDefine
       AST.define @, @value
@@ -375,15 +346,6 @@ AST.register class PARAM extends AST
       false
   ref: () -> 
     AST.ref @name , @
-  toString: () ->
-    if @paramType and @default
-      "{PARAM #{@name} #{@paramType} = #{@default}}"
-    else if @paramType 
-      "{PARAM #{@name} #{@paramType}}"
-    else if @default
-      "{PARAM #{@name} = #{@default}}"
-    else 
-      "{PARAM #{@name}}"
   _pretty: (level, dupe) -> 
     [
       '{param '
@@ -402,22 +364,6 @@ AST.register class PROCEDURE extends AST
       @body.equals(v.body)
     else
       false
-  toString: () ->
-    buffer = ["{PROCEDURE "]
-    if @name 
-      buffer.push @name, " "
-    buffer.push "("
-    for param, i in @params or []
-      if i > 0 
-        buffer.push ", "
-      buffer.push param.toString()
-    buffer.push ") "
-    if @body 
-      buffer.push @body.toString()
-    if @returns
-      @buffer.push " : ", @returns.toString()
-    buffer.push "}"
-    buffer.join ''
   _pretty: (level, dupe) ->
     dupe = util.dupe @, dupe 
     [
@@ -438,8 +384,6 @@ AST.register class LET extends AST
   constructor: (@defines, @body) ->
   _equals: (v) -> 
     @ == v
-  toString: () -> 
-    "{LET #{@defines} #{@body}}"
   _pretty: (level, dupe) -> 
     dupe = util.dupe @, dupe
     [
@@ -471,8 +415,6 @@ AST.register class TASK extends AST
       false
   isAsync: () ->
     @body.isAsync()
-  toString: () ->
-    "{TASK #{@name} #{@params} #{@body} #{@returns}}"
   _pretty: (level, dupe) ->
     dupe = util.dupe @, dupe
     [
@@ -495,8 +437,6 @@ AST.register class IF extends AST
     @cond.equals(v.cond) and @then.equals(v.then) and @else.equals(v.else)
   isAsync: () ->
     @then.isAsync() or @else.isAsync()
-  toString: () ->
-    "{IF #{@cond} #{@then} #{@else}}"
   canReduce: () -> true # this is actually not necessarily true...!!!
   _pretty: (level, dupe) -> 
     dupe = util.dupe @, dupe
@@ -528,8 +468,6 @@ AST.register class FUNCALL extends AST
         false
     else
       false
-  toString: () ->
-    "{FUNCALL #{@funcall} #{@args}}"
   canReduce: () -> # this is actually not necessarily true...!!!
     if @funcall.canReduce()
       return true
@@ -557,8 +495,6 @@ AST.register class TASKCALL extends FUNCALL
   @type: 'taskcall'
   isAsync: () ->
     true
-  toString: () ->
-    "{TASKCALL #{@funcall} #{@args}}"
   _pretty: (level, dupe) ->
     dupe = util.dupe @, dupe
     [
@@ -594,8 +530,6 @@ AST.register class BINARY extends AST
   constructor: (@op, @lhs, @rhs) ->
   _equals: (v) ->
     @op == v.op and @lhs.equals(v.lhs) and @rhs.equals(v.rhs)
-  toString: () ->
-    "{#{@op} #{@lhs} #{@rhs}}"
   canReduce: () ->
     @lhs.canReduce() or @rhs.canReduce()
   _pretty: (level, dupe) ->
@@ -629,8 +563,6 @@ AST.register class CATCH extends AST
     @param.equals(v.param) and @body.equals(v.body)
   isAsync: () ->
     @body.isAsync()
-  toString: () ->
-    "{CATCH #{@param} #{@body}}"
   canReduce: () -> true
   _pretty: (level, dupe) ->
     dupe = util.dupe @, dupe 
@@ -651,8 +583,6 @@ AST.register class FINALLY extends AST
     @body.equals(v.body)
   isAsync: () ->
     @body.isAsync()
-  toString: () ->
-    "{FINALLY #{@body}}"
   canReduce: () -> 
     @body.canReduce()
   _pretty: (level, dupe) -> 
@@ -692,8 +622,6 @@ AST.register class TRY extends AST
         if c.isAsync()
           return true
       @finally?.isAsync() or false 
-  toString: () ->
-    "{TRY #{@body} #{@catches} #{@finally}}"
   canReduce: () -> true
   _pretty: (level, dupe) ->
     dupe = util.dupe @, dupe
@@ -802,19 +730,12 @@ AST.register class MODULE extends TOPLEVEL
       util.nest(level)
       '}'
     ]
-  toString: () ->
-    "{MODULE #{@body}}"
 
 AST.register class BINDING extends AST
   @type: 'binding'
   constructor: (@spec, @as = null) ->
     if not @as
       @as = @spec
-  toString: () ->
-    if @as 
-      "{AS #{@spec} #{@as}}"
-    else
-      "{#{@spec}}"
   _pretty: (level, dupe) -> 
     dupe = util.dupe @, dupe
     [
@@ -835,8 +756,6 @@ AST.register class IMPORT extends AST
   normalizeSpec: () ->
     # spec is going to be a string...
     AST.param AST.symbol @spec.value.replace(/[\.\/\\]/g, '_') 
-  toString: () ->
-    "{IMPORT #{@spec}} #{@bindings}"
   defines: () ->
     for binding in @bindings 
       @define binding
@@ -861,8 +780,6 @@ AST.register class IMPORT extends AST
 AST.register class EXPORT extends AST 
   @type: 'export'
   constructor: (@bindings = []) ->
-  toString: () ->
-    "{EXPORT #{@bindings}}"
   isAsync: () -> false
   _pretty: (level, dupe) ->
     dupe = util.dupe @, dupe
@@ -885,8 +802,6 @@ These are used for tail call transformations.
 AST.register class VAR extends AST 
   @type: 'var'
   constructor: (@name) ->
-  toString: () -> 
-    "{VAR #{@name}}"
   _pretty: (level, dupe) -> 
     [
       '{var '
@@ -901,8 +816,6 @@ AST.register class WHILE extends AST
     @cond.equals(v.cond) and @block.equals(v.block)
   isAsync: () ->
     @cond.isAsync() or @block.isAsync()
-  toString: () ->
-    "{WHILE #{@cond} #{@block}}"
   _pretty: (level, dupe) -> 
     dupe = util.dupe @, dupe
     [
@@ -917,23 +830,17 @@ AST.register class WHILE extends AST
 
 AST.register class CONTINUE extends AST
   @type: 'continue'
-  toString: () -> 
-    "{CONTINUE}"
   _pretty: (level, dupe) -> 
     "{continue}"
 
 AST.register class BREAK extends AST
   @type: 'break'
-  toString: () -> 
-    "{BREAK}"
   _pretty: (level, dupe) -> 
     "{break}"
 
 AST.register class SWITCH extends AST
   @type: 'switch'
   constructor: (@cond, @cases = []) ->
-  toString: () ->
-    "{SWITCH #{@cond} #{@cases}}"
   _pretty: (level, dupe) -> 
     dupe = util.dupe @, dupe
     [
@@ -949,8 +856,6 @@ AST.register class SWITCH extends AST
 AST.register class CASE extends AST
   @type: 'case'
   constructor: (@cond, @exp) ->
-  toString: () ->
-    "{CASE #{@cond} #{@exp}}"
   _pretty: (level, dupe) -> 
     dupe = util.dupe @, dupe 
     [
@@ -966,8 +871,6 @@ AST.register class CASE extends AST
 AST.register class DEFAULTCASE extends AST
   @type: 'defaultCase'
   constructor: (@exp) ->
-  toString: () ->
-    "{DEFAULT #{@exp}}"
   _pretty: (level, dupe) -> 
     dupe = util.dupe @, dupe 
     [
