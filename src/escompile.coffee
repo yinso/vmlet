@@ -167,6 +167,8 @@ _local = (ast, env) ->
 register AST.get('local'), _local
 
 _ref = (ast, env) ->
+  if not ast.value 
+    throw new Error("escompile.ref.no_value: #{ast}")
   if ast.value.type() == 'proxyval'
     _compile ast.value, env
   else if ast.isDefine

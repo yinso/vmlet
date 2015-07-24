@@ -301,6 +301,8 @@ AST.register class REF extends AST
     AST.assign @, @value
   export: (@as = null ) ->
     AST.export [ AST.binding(@, @as) ]
+  literal: () -> 
+    @name.literal()
   normalName: () ->
     @name
   _pretty: (level, dupe) -> 
@@ -355,7 +357,7 @@ AST.register class PARAM extends AST
 
 AST.register class PROCEDURE extends AST
   @type: 'procedure'
-  constructor: (@name, @params, @body, @returns = null) ->
+  constructor: (@name, @params, @body = AST.unit(), @returns = null) ->
   _equals: (v) ->
     if @name == @name
       for param, i in @params
@@ -760,9 +762,9 @@ AST.register class IMPORT extends AST
     for binding in @bindings 
       @define binding
   define: (binding) ->
-    AST.define binding.as, AST.funcall(AST.member(@idParam.ref(), AST.symbol('get')), [AST.string(binding.spec.value)])
+    AST.define binding.as, AST.funcall(AST.member(@idParam.ref(), AST.symbol('get')), [binding.spec.literal()])
   proxy: (binding) ->
-    AST.proxyval binding.as, AST.funcall(AST.member(moduleID, AST.symbol('get')), [ AST.string(binding.as.value)])
+    AST.proxyval binding.as, AST.funcall(AST.member(moduleID, AST.symbol('get')), [ binding.spec.literal()])
   importSpec: () ->
     @spec.value
   _pretty: (level, dupe) ->

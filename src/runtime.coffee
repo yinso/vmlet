@@ -5,9 +5,10 @@ errorlet = require 'errorlet'
 parser = require './parser'
 AST = require './ast'
 RESOLVER = require './resolver'
+ANF = require './anf'
 require './ret'
 CPS = require './cps'
-SymbolTable = require './symboltable'
+Environment = require './symboltable'
 Unit = require './unit'
 util = require './util'
 TR = require './trace'
@@ -52,8 +53,8 @@ class Session
 
 class Module 
   @fromPrev: (name, prevEnv) ->
-    new @ name, new SymbolTable prevEnv
-  constructor: (@name , @env = new SymbolTable()) ->
+    new @ name, new Environment prevEnv
+  constructor: (@name , @env = new Environment()) ->
     @inner = {}
     @imports = {}
     @exports = {}
@@ -70,6 +71,7 @@ class Module
     for key, val of obj
       if obj.hasOwnProperty(key)
         @exports[key] = val
+    @
   import: (keys = []) ->
     if keys.length > 0 
       res = []
@@ -97,7 +99,7 @@ class Toplevel
 # we want something that signifies the global module and that's the baseEnv...
 # when we define a module we not only want to define 
 class Runtime
-  constructor: (@baseEnv = new SymbolTable(), @main = Module.fromPrev(':main', @baseEnv)) ->
+  constructor: (@baseEnv = new Environment(), @main = Module.fromPrev(':main', @baseEnv)) ->
     @modules = {}
     @envs = {}
     @parser = parser
@@ -130,6 +132,7 @@ class Runtime
     else
       res
   toplevel: (depends, proc, module = @main) ->
+    console.log 'Runtime.toplevel', proc
     modules = 
       for dep in depends 
         if not @modules.hasOwnProperty(dep)
@@ -158,8 +161,10 @@ class Runtime
     ast
   transform: (ast, env = @main.env) ->
     ast = RESOLVER.transform ast, env
-    #console.log 'resolver.transformed', ast
-    ast
+    console.log 'resolver.transformed', ast
+    anf = ANF.transform ast
+    console.log 'ANF.transformed', anf
+    anf
   compile: (ast) ->
     compiled = compiler.compile ast
     console.log '--Runtime.compile', compiled
@@ -173,6 +178,7 @@ class Runtime
       return cb null, util.prettify(@main)
     try 
       ast = AST.toplevel @parse stmt 
+      console.log 'Runtime.parsed', ast
       @evalParsed ast, @main.env, cb
     catch e
       cb e
@@ -211,7 +217,7 @@ class Runtime
         else
           try # this isn't really trying to 
             parsed = AST.module AST.string(spec), @parse data 
-            @envs[spec] = new SymbolTable @baseEnv
+            @envs[spec] = new Environment @baseEnv
             @evalParsed parsed, @envs[spec], (err, module) =>
               if err 
                 cb err

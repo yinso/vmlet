@@ -1,128 +1,145 @@
-#loglet = require '#loglet'
-errorlet = require 'errorlet'
 AST = require './ast'
 Environment = require './symboltable'
-tr = require './trace'
+T = require './transformer'
 
-_transTypes = {}
+types = {}
 
-register = (ast, transformer) ->
-  if _transTypes.hasOwnProperty(ast.type)
-    throw errorlet.create {error: 'anf_duplicate_ast_type', type: ast.type}
-  else
-    _transTypes[ast.type] = transformer
-  
+register = (type, transformer) ->
+  if types.hasOwnProperty(type.type)
+    throw new Error("ANF.duplicate_type: #{type.type}")
+  types[type.type] = transformer 
+
 get = (ast) ->
-  if _transTypes.hasOwnProperty(ast.constructor.type)
-    _transTypes[ast.constructor.type]
+  if types.hasOwnProperty(ast.type())
+    types[ast.type()]
   else
-    throw errorlet.create {error: 'anf_unsupported_ast_type', type: ast.constructor.type}
+    throw new Error("ANF.unknown_type: #{ast.type()}")
 
-override = (ast, transformer) ->
-  _transTypes[ast.type] = transformer
+transform = (ast, env = new Environment(), block = AST.block()) -> 
+  res = _transInner ast, env, block
+  console.log 'ANF._trans', ast, res
+  T.transform res
+
+_normalize = (ast, block) -> 
+  switch ast.type()
+    when 'toplevel', 'module'
+      ast 
+    else
+      _normalizeBlock block
+
+_transInner = (ast, env, block = AST.block()) -> 
+  res = _trans ast, env, block 
+  _normalize res, block
+
+_normalizeBlock = (ast) -> 
+  items = []
+  console.log 'ANF.normalizeBlock', ast
+  for item, i in ast.items
+    if i < ast.items.length - 1 
+      switch item.type()
+        when 'number', 'string', 'bool', 'null', 'unit', 'proxyval', 'ref', 'symbol'
+          item
+        else
+          items.push item
+    else
+      items.push item 
+  AST.block items
+
+_trans = (ast, env, block = AST.block()) -> 
+  trans = get ast
+  trans ast, env , block
 
 assign = (ast, env, block) ->
   sym = env.defineTemp ast 
-  block.push AST.local sym, ast
+  block.push AST.local(sym, ast)
   sym
 
-normalize = (ast) ->
-  switch ast.type()
-    when 'block'
-      normalizeBlock ast
-    else
-      ast 
-
-normalizeBlock = (ast) ->
-  items = []
-  for item, i in ast.items 
-    if i < ast.items.length - 1 
-      switch item.type()
-        when 'local', 'define', 'export', 'import', 'block'
-          items.push item
-    else
-      items.push switch item.type()
-        when 'local'
-          item.value
-        when 'define'
-          item.value
-        else
-          item
-  if items.length == 1 
-    items[0]
-  else
-    AST.block items
-
-transform = (ast, env, block = AST.block([])) ->
-  _transform ast, env, block
-  normalize block
-
-_transformInner = (ast, env, block = AST.block()) ->
-  _transform ast, env, block 
-  block
-
-_transform = (ast, env, block = AST.block()) ->
-  transformer = get ast 
-  transformer ast, env, block
-
-_scalar = (ast, env, block) ->
-  block.push ast
+_scalar = (ast, env, block) -> 
+  block.push ast 
 
 register AST.get('number'), _scalar
+register AST.get('string'), _scalar
 register AST.get('bool'), _scalar
 register AST.get('null'), _scalar
-register AST.get('string'), _scalar
-register AST.get('ref'), _scalar
 register AST.get('unit'), _scalar
+register AST.get('proxyval'), _scalar
 
-_proc = (ast, env, block) ->
-  assign ast, env, block
-register AST.get('procedure'), _proc
-register AST.get('task'), _proc
+_alias = (ast, env) -> 
+  switch ast.type()
+    when 'ref'
+      if env.has ast.name 
+        env.get ast.name 
+      else
+        env.define ast.name, ast.value 
+    when 'symbol'
+      if env.has ast 
+        env.get ast 
+      else
+        env.define ast 
+    else
+      throw new Error("ANF.alias:unsuppoted_type: #{ast}")
+
+_symbol = (ast, env, block) -> 
+  _alias ast, env
+
+register AST.get('symbol'), _symbol
+
+_ref = (ast, env, block) -> 
+  ref = _alias ast, env
+  block.push ref
+
+register AST.get('ref'), _ref
 
 _binary = (ast, env, block) ->
-  ##loglet.log '--anf.binary', ast
-  lhs = _transform ast.lhs, env, block
-  rhs = _transform ast.rhs, env, block
+  lhs = _trans ast.lhs, env, block
+  rhs = _trans ast.rhs, env, block
   assign AST.binary(ast.op, lhs, rhs), env, block
   
 register AST.get('binary'), _binary
 
 _if = (ast, env, block) ->
-  cond = _transform ast.cond, env, block
-  thenAST = _transformInner ast.then, env
-  elseAST = _transformInner ast.else, env
-  ##loglet.log '--anf.cond', ast, cond, thenAST, elseAST
+  cond = _trans ast.cond, env, block
+  thenAST = _transInner ast.then, env
+  elseAST = _transInner ast.else, env
   assign AST.if(cond, thenAST, elseAST), env, block
 
 register AST.get('if'), _if
 
 _block = (ast, env, block) ->
-  newEnv = new Environment env
   for i in [0...ast.items.length - 1]
-    _transform ast.items[i], newEnv, block
-  res = _transform ast.items[ast.items.length - 1], newEnv, block
+    _trans ast.items[i], env, block
+  res = _trans ast.items[ast.items.length - 1], env, block
   res
 
 register AST.get('block'), _block
 
 _define = (ast, env, block) ->
-  res = transform ast.value, env
+  ref = _alias ast.name, env, block
+  res = _transInner ast.value, env
+  console.log 'anf.define', ast, res
   if res.type() == 'block'
     for exp, i in res.items
       if i < res.items.length - 1 
         block.push exp
       else
-        block.push AST.define(ast.name, exp)
+        switch exp.type()
+          when 'define', 'local'
+            ref.value = exp.value
+            block.push AST.define(ref, exp.value)
+          else
+            ref.value = exp
+            block.push AST.define(ref, exp)
   else
-    block.push AST.define(ast.name, res)
+    ref.value = exp
+    block.push AST.define(ref, res)
 
 register AST.get('define'), _define
 
 _local = (ast, env, block) ->
+  ref = _alias ast.name, env, block
   res = 
     if ast.value 
-      transform ast.value, env 
+      _transInner ast.value, env
     else
       ast.value 
   if res.type() == 'block'
@@ -130,23 +147,24 @@ _local = (ast, env, block) ->
       if i < res.items.length - 1 
         block.push exp 
       else
-        cloned = AST.local ast.name, exp 
-        block.push cloned 
+        switch exp.type()
+          when 'define', 'local'
+            ref.value = exp.value
+            block.push AST.local(ref, exp.value)
+          else
+            ref.value = exp
+            block.push AST.local(ref, exp)
   else
-    cloned = AST.local ast.name , res 
+    ref.value = res
+    cloned = AST.local ref, res 
     block.push cloned 
 
 register AST.get('local'), _local
 
-_identifier = (ast, env, block) ->
-  ast
-  
-register AST.get('symbol'), _identifier
-
 _object = (ast, env, block) ->
   keyVals = 
     for [key, val] in ast.value
-      v = _transform val, env, block
+      v = _trans val, env, block
       [key, v]
   assign AST.object(keyVals), env, block
 
@@ -155,13 +173,13 @@ register AST.get('object'), _object
 _array = (ast, env, block) ->
   items = 
     for v in ast.value
-      _transform v, env, block
+      _trans v, env, block
   assign AST.array(items), env, block
 
 register AST.get('array'), _array
 
 _member = (ast, env, block) ->
-  head = _transform ast.head, env, block
+  head = _trans ast.head, env, block
   assign AST.member(head, ast.key), env, block
 
 register AST.get('member'), _member
@@ -170,8 +188,9 @@ _funcall = (ast, env, block) ->
   #loglet.log '--anf._funcall', ast, block
   args = 
     for arg in ast.args
-      _transform arg, env, block
-  funcall = _transform ast.funcall, env, block
+      _trans arg, env, block
+  funcall = _trans ast.funcall, env, block
+  console.log 'ANF.funcall.funcall', funcall
   ast = AST.funcall funcall, args
   assign ast, env, block
 
@@ -181,40 +200,53 @@ _taskcall = (ast, env, block) ->
   #loglet.log '--anf._taskcall', ast, block
   args = 
     for arg in ast.args
-      _transform arg, env, block
-  funcall = _transform ast.funcall, env, block
+      _trans arg, env, block
+  funcall = _trans ast.funcall, env, block
   assign AST.taskcall(funcall, args), env, block
 
 register AST.get('taskcall'), _taskcall
 
-_param = (ast, env, block) ->
-  ast
-  
-register AST.get('param'), _param
-
-makeProc = (type) ->
+_proc = (type) ->
   (ast, env, block) ->
     newEnv = new Environment env
-    body = _transformInner ast.body, newEnv
-    ast = AST.make type, ast.name or undefined, ast.params, body
-    assign ast, env, block
+    ref = 
+      if ast.name 
+        _trans ast.name, newEnv 
+      else
+        undefined
+    params = 
+      for p in ast.params
+        _trans p, newEnv 
+    proc = AST.make type, ref, params
+    if ref 
+      ref.value = proc 
+    proc.body = _transInner ast.body, newEnv 
+    console.log 'ANF.proc.trans', ref, ref.value
+    block.push T.transform(proc)
 
-#register AST.get('procedure'), makeProc('procedure')
-#register AST.get('task'), makeProc('task')
-#register AST.get('procedure'), Transformer.transform
-#register AST.get('task'), Transformer.transform
+register AST.get('procedure'), _proc('procedure')
+register AST.get('task'), _proc('task')
+
+_param = (ast, env, block) -> 
+  ref = _alias ast.name, env, block
+  ref.value = AST.param ref, ast.type, ast.default 
+  ref.value
+
+register AST.get('param'), _param 
 
 _throw = (ast, env, block) ->
-  exp = _transform ast.value, env, block
+  exp = _trans ast.value, env, block
   block.push AST.throw exp
   
 register AST.get('throw'), _throw
 
 _catch = (ast, env, block) ->
   newEnv = new Environment env
-  ref = newEnv.defineParam ast.param
-  body = transform ast.body, newEnv
-  AST.catch ast.param, body
+  param = _trans ast.param, newEnv
+  body = _trans ast.body, newEnv
+  AST.catch param, body
+
+register AST.get('catch'), _catch 
 
 _finally = (ast, env, block) ->
   newEnv = new Environment env
@@ -223,12 +255,12 @@ _finally = (ast, env, block) ->
 
 _try = (ast, env, block) ->
   newEnv = new Environment env
-  body = transform ast.body, newEnv
+  body = _trans ast.body, newEnv
   catches = 
     for c in ast.catches
       _catch c, env, block
   fin = 
-    if ast.finally instanceof AST
+    if ast.finally 
       _finally ast.finally, env, block
     else
       null
@@ -237,20 +269,22 @@ _try = (ast, env, block) ->
 register AST.get('try'), _try
 
 _import = (ast, env, block) ->
-  for define in ast.defines()
-    #_define define, env, block
-    block.push define
+  defines = 
+    for binding in ast.bindings
+      #_trans AST.define(binding.as, ast.proxy(binding)), env, block
+      _trans ast.define(binding), env, block
+    #for define in ast.defines()
+    #  _trans define, env, block
   block.push AST.unit()
 
 register AST.get('import'), _import
 
 _export = (ast, env, block) ->
-  block.push ast
-  #for binding in ast.bindings 
-  #  ref = env.get binding.spec 
-  #  block.push AST.export [ binding ]
-  #  #block.push ref.export()
-  # AST.unit()
+  bindings = 
+    for binding in ast.bindings 
+      spec = _trans binding.spec, env, block
+      AST.binding spec, binding.as
+  block.push AST.export bindings
 
 register AST.get('export'), _export
 
@@ -258,11 +292,11 @@ _let = (ast, env, block) ->
   newEnv = new Environment env
   defines = []
   for define in ast.defines
-    res = _transformInner define, newEnv
+    res = _trans define, newEnv
     for exp in res.items
       block.push exp
     #block.push res.items[0]
-  body = _transformInner ast.body , newEnv
+  body = _trans ast.body , newEnv
   if body.type() == 'block'
     for exp in body.items 
       block.push exp 
@@ -271,9 +305,19 @@ _let = (ast, env, block) ->
 
 register AST.get('let'), _let
 
-module.exports = 
-  register: register
-  get: get
-  override: override
-  transform: transform
+_toplevel = (ast, env, block) -> 
+  body = _transInner ast.body, env, block 
+  ast.clone AST.return(body)
 
+register AST.get('toplevel'), _toplevel
+
+_module = (ast, env, block) -> 
+  body = _transInner ast.body, env, block 
+  ast.clone AST.return(body)
+
+register AST.get('module'), _module
+
+module.exports = 
+  register: register 
+  get: get 
+  transform: transform 

@@ -114,7 +114,10 @@ _goto = (ast, proc, labelVar) ->
 isTailRecursive = (ast, proc) ->
   switch ast.type()
     when 'block'
-      isTailRecursive ast.items[ast.items.length - 1], proc
+      if ast.items.length == 0 
+        false
+      else
+        isTailRecursive ast.items[ast.items.length - 1], proc
     when 'if'
       isTailRecursive(ast.then, proc) or isTailRecursive(ast.else, proc)
     when 'return'

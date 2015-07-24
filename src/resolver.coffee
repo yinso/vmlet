@@ -5,8 +5,6 @@ errorlet = require 'errorlet'
 AST = require './ast'
 SymbolTable = require './symboltable'
 tr = require './trace'
-T = require './transformer'
-ANF = require './anf'
 util = require './util'
 
 _transTypes = {}
@@ -27,12 +25,9 @@ transform = (ast, env) ->
   switch ast.type()
     when 'toplevel', 'module'
       resolved = _transform ast.body, env
-      anf = ANF.transform resolved, env
-      T.transform ast.clone(AST.return(anf))
+      ast.clone resolved
     else
-      resolved = _transform ast, env
-      anf = ANF.transform resolved, env
-      T.transform AST.return(anf)
+      _transform ast, env
 
 _transform = (ast, env) ->
   resolver = get(ast)
@@ -175,9 +170,8 @@ makeProc = (type) ->
         env.get(ast.name).value = decl
       else # it's not defined at a higher level, we need to create our own definition.
         newEnv.define ast.name , decl 
-    body = _transform ast.body, newEnv
-    decl.body = body
-    T.transform decl
+    decl.body = _transform ast.body, newEnv
+    decl
 
 register AST.get('procedure'), makeProc('procedure')
 register AST.get('task'), makeProc('task')

@@ -44,7 +44,7 @@ objToStr = (arg) ->
     return [ indent(2) + 'null' ]
   if arg == undefined 
     return [ indent(2) + 'undefined' ]
-  for str, i in util.stringify(arg).split '\n'
+  for str, i in util.prettify(arg).split '\n'
     if i == 0 
       indent(2) + str
     else

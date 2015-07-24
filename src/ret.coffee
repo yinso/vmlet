@@ -2,7 +2,7 @@ AST = require './ast'
 T = require './transformer'
 tr = require './trace'
 CPS = require './cps'
-TRE = require './tail'
+TCO = require './tail'
 
 # when this is called it would be ANF'd.
 atomicTypes = 
@@ -202,7 +202,7 @@ T.register 'procedure', ($p) ->
       AST.block [ body ]
   # this make sure that we don't lose the references that points to this procedure.
   $p.body = body
-  TRE.transform $p
+  TCO.transform $p
 
 T.register 'task', ($p) -> 
   [ $p.name , $p.params, $p.body , $p.returns ]
@@ -221,3 +221,4 @@ T.register 'module', ($t) ->
 , ($t, $body) -> 
   body = T.transform $body 
   CPS.transform $t.clone body
+
