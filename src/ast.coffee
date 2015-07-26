@@ -48,13 +48,13 @@ class AST
 
 AST.register class SYMBOL extends AST
   @type: 'symbol'
-  constructor: (@value, @suffix = undefined) ->
+  constructor: (@value) ->
   _equals: (v) ->
-    @value == v.value and @suffix == v.suffix
+    @ == v
   nested: () ->
-    new @constructor @value, if @suffix == undefined then 1 else @suffix + 1 
+    new @constructor @value
   clone: () ->
-    new @constructor @value, if @suffix == undefined then 1 else @suffix + 1 
+    new @constructor @value
   literal: () -> 
     AST.string(@value)
   _pretty: (level, dupe) -> 

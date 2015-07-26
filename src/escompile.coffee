@@ -17,22 +17,12 @@ get = (ast) ->
   else
     throw new Error("compiler:unknown_type: #{ast.type()}")
 
-hashCode = (str) ->
-  hash = 0
-  if str.length == 0
-    return hash
-  for i in [0...str.length]
-    char = str.charCodeAt i 
-    hash = ((hash<<5) - hash) + char
-    hash = hash & hash 
-  return hash
-
 class Environment 
   # strictly speaking we don't need prev? but it's still nice to have it I think.
   constructor: (@prev = null) ->
     @dupes = {}
     @inner = new Hashmap
-      hashCode: hashCode
+      hashCode: util.hashCode
   has: (key) ->
     if @inner.has key
       true 

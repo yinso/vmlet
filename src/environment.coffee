@@ -21,6 +21,8 @@ class SymbolTable
   constructor: (@prev = null) ->
     @inner = {}
     @temp = 0
+  hasName: (sym) -> 
+    @has sym
   has: (sym) ->
     # we can really just store strings? 
     if @_has sym

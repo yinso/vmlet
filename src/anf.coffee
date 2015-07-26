@@ -1,5 +1,5 @@
 AST = require './ast'
-Environment = require './symboltable'
+Environment = require './environment'
 T = require './transformer'
 
 types = {}
@@ -17,7 +17,6 @@ get = (ast) ->
 
 transform = (ast, env = new Environment(), block = AST.block()) -> 
   res = _transInner ast, env, block
-  console.log 'ANF._trans', ast, res
   T.transform res
 
 _normalize = (ast, block) -> 
@@ -33,7 +32,6 @@ _transInner = (ast, env, block = AST.block()) ->
 
 _normalizeBlock = (ast) -> 
   items = []
-  console.log 'ANF.normalizeBlock', ast
   for item, i in ast.items
     if i < ast.items.length - 1 
       switch item.type()
@@ -116,7 +114,6 @@ register AST.get('block'), _block
 _define = (ast, env, block) ->
   ref = _alias ast.name, env, block
   res = _transInner ast.value, env
-  console.log 'anf.define', ast, res
   if res.type() == 'block'
     for exp, i in res.items
       if i < res.items.length - 1 
@@ -190,7 +187,6 @@ _funcall = (ast, env, block) ->
     for arg in ast.args
       _trans arg, env, block
   funcall = _trans ast.funcall, env, block
-  console.log 'ANF.funcall.funcall', funcall
   ast = AST.funcall funcall, args
   assign ast, env, block
 
@@ -221,7 +217,6 @@ _proc = (type) ->
     if ref 
       ref.value = proc 
     proc.body = _transInner ast.body, newEnv 
-    console.log 'ANF.proc.trans', ref, ref.value
     block.push T.transform(proc)
 
 register AST.get('procedure'), _proc('procedure')

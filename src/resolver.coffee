@@ -3,21 +3,21 @@
 loglet = require 'loglet'
 errorlet = require 'errorlet'
 AST = require './ast'
-SymbolTable = require './symboltable'
+SymbolTable = require './environment'
 tr = require './trace'
 util = require './util'
 
-_transTypes = {}
+_types = {}
 
 register = (ast, transformer) ->
-  if _transTypes.hasOwnProperty(ast.type)
+  if _types.hasOwnProperty(ast.type)
     throw errorlet.create {error: 'resolver_duplicate_ast_type', type: ast.type}
   else
-    _transTypes[ast.type] = transformer
+    _types[ast.type] = transformer
   
 get = (ast) ->
-  if _transTypes.hasOwnProperty(ast.constructor.type)
-    _transTypes[ast.constructor.type]
+  if _types.hasOwnProperty(ast.constructor.type)
+    _types[ast.constructor.type]
   else
     throw errorlet.create {error: 'resolver_unsupported_ast_type', type: ast.constructor.type}
 
@@ -103,8 +103,7 @@ _define = tr.trace 'resolver.define', (ast, env) ->
 register AST.get('define'), _define
 
 _identifier = (ast, env) ->
-  #console.log 'RESOLVER.identifier', ast, env
-  if env.has ast
+  if env.hasName ast
     env.get ast
   else
     throw errorlet.create {error: 'RESOLVER.transform:unknown_identifier', id: ast}  

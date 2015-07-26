@@ -7,8 +7,9 @@ AST = require './ast'
 RESOLVER = require './resolver'
 ANF = require './anf'
 require './ret'
+DEFINE = require './defines'
 CPS = require './cps'
-Environment = require './symboltable'
+Environment = require './environment'
 Unit = require './unit'
 util = require './util'
 TR = require './trace'
@@ -132,7 +133,6 @@ class Runtime
     else
       res
   toplevel: (depends, proc, module = @main) ->
-    console.log 'Runtime.toplevel', proc
     modules = 
       for dep in depends 
         if not @modules.hasOwnProperty(dep)
@@ -161,10 +161,10 @@ class Runtime
     ast
   transform: (ast, env = @main.env) ->
     ast = RESOLVER.transform ast, env
-    console.log 'resolver.transformed', ast
     anf = ANF.transform ast
-    console.log 'ANF.transformed', anf
-    anf
+    defines = DEFINE.transform anf 
+    console.log '--Runtime.DEFINES', defines
+    anf 
   compile: (ast) ->
     compiled = compiler.compile ast
     console.log '--Runtime.compile', compiled

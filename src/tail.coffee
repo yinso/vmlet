@@ -2,8 +2,9 @@
 # tail recursion elimination (self-calling).
 # 
 AST = require './ast'
-Environment = require './symboltable'
+Environment = require './environment'
 TR = require './trace'
+REF = require './ref'
 
 # to convert a function into its recursion equivalent (we will handle declared self-recursion and mutual recursion at 
 # this level, and no async tco elimination). it takes the following steps.
@@ -29,11 +30,25 @@ TR = require './trace'
 # how do I solve this problem? 
 # 
 
+# it seems like we do not want to handle the transform for functions that are nested... 
+# although some tail recursive functions might be written at a nested level... what to do here? 
+# in order to handle all these things generally. 
+# we will need to pull out all of the functions, and then try to figure out how they call each other. 
+#
+# for example, a nested function, unless being returned, will not be seen outside of the existing structure. 
+# that means we ought to be able to make such determinations to see if t
+
 
 transform = (ast) ->
   #console.log 'TRE.transform', ast 
   # first thing we need to do is to determine if which of the references are defined within the procedure itself. 
   res = isTailRecursive ast.body, ast
+  refs = REF.transform ast
+  for ref in refs 
+    if ref.value.type() == 'procedure'
+      console.log '-- TCO.transform.ref.proc', ast.name, ref, ast.name == ref, ref.value
+    else if ref.value.type() == 'proxyval' # this points to something extenral... 
+      console.log '-- TCO.transform.ref.proxval', ast.name, ref
   if res 
     trans = tailRecursive(ast)
     trans

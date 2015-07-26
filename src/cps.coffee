@@ -140,7 +140,7 @@ _cpsOne = (item, contAST, cbAST) ->
 
 _toplevel = (ast) ->
   body = normalize ast.body 
-  console.log 'cps.toplevel', ast.body, body
+  #console.log 'cps.toplevel', ast.body, body
   params = [ ast.moduleParam ]
   cbAST = ast.callbackParam.ref()
   task = _task AST.task(null, params, body), cbAST, cbAST
@@ -151,7 +151,7 @@ register AST.get('toplevel'), _toplevel
 _task = (ast, contAST, cbAST) ->
   body = normalize ast.body
   params = [].concat(ast.params).concat(ast.callbackParam)
-  console.log '--cpTask', ast.body, body
+  #console.log '--cpTask', ast.body, body
   body = 
     if body.items[0].type() == 'try'
         _cpsOne(body, cbAST, cbAST)
