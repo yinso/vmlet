@@ -5,6 +5,7 @@ AST = require './ast'
 Environment = require './environment'
 TR = require './trace'
 REF = require './ref'
+CLONE = require './clone'
 
 # to convert a function into its recursion equivalent (we will handle declared self-recursion and mutual recursion at 
 # this level, and no async tco elimination). it takes the following steps.
@@ -44,11 +45,11 @@ transform = (ast) ->
   # first thing we need to do is to determine if which of the references are defined within the procedure itself. 
   res = isTailRecursive ast.body, ast
   refs = REF.transform ast
-  for ref in refs 
-    if ref.value.type() == 'procedure'
-      console.log '-- TCO.transform.ref.proc', ast.name, ref, ast.name == ref, ref.value
-    else if ref.value.type() == 'proxyval' # this points to something extenral... 
-      console.log '-- TCO.transform.ref.proxval', ast.name, ref
+  #for ref in refs 
+  #  if ref.value.type() == 'procedure'
+  #    console.log '-- TCO.transform.ref.proc', ast.name, ref, ast.name == ref, ref.value
+  #  else if ref.value.type() == 'proxyval' # this points to something extenral... 
+  #    console.log '-- TCO.transform.ref.proxval', ast.name, ref
   if res 
     trans = tailRecursive(ast)
     trans
@@ -117,7 +118,7 @@ _goto = (ast, proc, labelVar) ->
   items = []
   tempVars = 
     for param, i in proc.params 
-      param.name.clone()
+      CLONE.transform param.name
   for arg, i in ast.args 
     items.push AST.local(tempVars[i], arg)
   for arg, i in ast.args 

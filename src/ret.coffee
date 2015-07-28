@@ -3,6 +3,7 @@ T = require './transformer'
 tr = require './trace'
 CPS = require './cps'
 TCO = require './tail'
+CLONE = require './clone'
 
 # when this is called it would be ANF'd.
 atomicTypes = 
@@ -194,13 +195,25 @@ T.register 'assign', ($a) ->
 T.register 'procedure', ($p) -> 
   [ $p.name , $p.params, $p.body , $p.returns ]
 , ($p, $name, $params, $body, $returns) -> 
-  body = T.transform AST.return($body)
+  newParams = 
+    for param in $params 
+      CLONE.transform param
+  locals = 
+    for param, i in $params 
+      AST.local param.name, newParams[i].ref()
+  body = 
+    if $body.type() == 'block'
+      AST.block locals.concat($body.items)
+    else
+      AST.block locals.concat($body)
+  body = T.transform AST.return(body)
   body = 
     if body.type() == 'block'
       body
     else
       AST.block [ body ]
   # this make sure that we don't lose the references that points to this procedure.
+  $p.params = newParams 
   $p.body = body
   TCO.transform $p
 

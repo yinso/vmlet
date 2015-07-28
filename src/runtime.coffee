@@ -7,7 +7,7 @@ AST = require './ast'
 RESOLVER = require './resolver'
 ANF = require './anf'
 require './ret'
-DEFINE = require './defines'
+PROC = require './procedure'
 CPS = require './cps'
 Environment = require './environment'
 Unit = require './unit'
@@ -157,13 +157,15 @@ class Runtime
     @define key, @makeAsync funcMaker
   parse: (stmt) ->
     ast = @parser.parse stmt
-    #loglet.log '-------- Runtime.parsed =>', ast
+    #TR.log '-------- Runtime.parsed =>', ast
     ast
   transform: (ast, env = @main.env) ->
     ast = RESOLVER.transform ast, env
+    #TR.log '-------- Runtime.resolved =>', ast
+    defines = PROC.normalize ast 
+    #console.log '--Runtime.before.anf', ast
     anf = ANF.transform ast
-    defines = DEFINE.transform anf 
-    console.log '--Runtime.DEFINES', defines
+    #console.log '--Runtime.after.anf', anf
     anf 
   compile: (ast) ->
     compiled = compiler.compile ast
@@ -178,7 +180,7 @@ class Runtime
       return cb null, util.prettify(@main)
     try 
       ast = AST.toplevel @parse stmt 
-      console.log 'Runtime.parsed', ast
+      #console.log 'Runtime.parsed', ast
       @evalParsed ast, @main.env, cb
     catch e
       cb e

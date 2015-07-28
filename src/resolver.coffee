@@ -3,7 +3,7 @@
 loglet = require 'loglet'
 errorlet = require 'errorlet'
 AST = require './ast'
-SymbolTable = require './environment'
+Environment = require './environment'
 tr = require './trace'
 util = require './util'
 
@@ -62,7 +62,7 @@ _block = (ast, env) ->
   # block doesn't introduce new scoping... 
   # maybe that's better... hmm...
   # function and let introduce new scoping.
-  #newEnv = new SymbolTable env
+  #newEnv = new Environment env
   # first pull out all of the defines. 
   for item, i in ast.items 
     if item.type() == 'define'
@@ -159,16 +159,19 @@ register AST.get('param'), _param
 
 makeProc = (type) ->
   (ast, env) ->
-    newEnv = new SymbolTable env
+    newEnv = new Environment env
     params = 
       for param in ast.params
         newEnv.defineParam param
     decl = AST.make type, ast.name, params, null 
     if ast.name 
       if env.has(ast.name) and env.get(ast.name).isPlaceholder()
-        env.get(ast.name).value = decl
+        ref = env.get(ast.name)
+        ref.value = decl
+        decl.name = ref
       else # it's not defined at a higher level, we need to create our own definition.
-        newEnv.define ast.name , decl 
+        ref = newEnv.define ast.name , decl 
+        decl.name = ref
     decl.body = _transform ast.body, newEnv
     decl
 
@@ -182,18 +185,18 @@ _throw = (ast, env) ->
 register AST.get('throw'), _throw
 
 _catch = (ast, env) ->
-  newEnv = new SymbolTable env
+  newEnv = new Environment env
   ref = newEnv.defineParam ast.param
   body = _transform ast.body, newEnv
   AST.make 'catch', ast.param, body
 
 _finally = (ast, env) ->
-  newEnv = new SymbolTable env
+  newEnv = new Environment env
   body = _transform ast.body, newEnv
   AST.make 'finally', body
 
 _try = (ast, env) ->
-  newEnv = new SymbolTable env
+  newEnv = new Environment env
   body = _transform ast.body, newEnv
   catches = 
     for c in ast.catches
@@ -210,7 +213,8 @@ register AST.get('try'), _try
 _import = (ast, env) ->
   # when we are transforming import, we are introducing bindings.
   for binding in ast.bindings 
-    env.define binding.as, ast.proxy(binding)
+    res = env.define binding.as, ast.proxy(binding)
+    #tr.log '--import.binding', res, res.value
   ast
 
 register AST.get('import'), _import 
@@ -227,7 +231,7 @@ _export = (ast, env) ->
 register AST.get('export'), _export
 
 _let = (ast, env) ->
-  newEnv = new SymbolTable env
+  newEnv = new Environment env
   defines = 
     for define in ast.defines 
       _transform define , newEnv

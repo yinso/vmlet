@@ -48,17 +48,17 @@ class AST
 
 AST.register class SYMBOL extends AST
   @type: 'symbol'
+  @count: 0
   constructor: (@value) ->
+    @count = @constructor.count++
   _equals: (v) ->
     @ == v
   nested: () ->
     new @constructor @value
-  clone: () ->
-    new @constructor @value
   literal: () -> 
     AST.string(@value)
   _pretty: (level, dupe) -> 
-    "{sym #{@value}}"
+    "{S:#{@value};#{@count}}"
 
 runtimeID = AST.runtimeID = AST.symbol('_rt')
 moduleID = AST.moduleID = AST.symbol('_module')
@@ -295,8 +295,8 @@ AST.register class REF extends AST
       AST.define @, @value
     else
       AST.local @, @value
-  clone: () ->
-    AST.ref @name.clone(), @value, @level
+  local: () -> 
+    AST.local @, @value
   assign: () ->
     AST.assign @, @value
   export: (@as = null ) ->
@@ -308,7 +308,12 @@ AST.register class REF extends AST
   _pretty: (level, dupe) -> 
     [
       '{ref '
-      (if @isDefine then '!' else '')
+      if @isDefine
+        '!'
+      else if @value?.type() == 'proxyval'
+        '%'
+      else
+        ''
       @name._pretty(level, dupe)
       '}'
     ]

@@ -1,9 +1,8 @@
 escodegen = require 'escodegen'
 esnode = require './esnode'
 AST = require './ast'
-util = require './util'
 TR = require './trace'
-Hashmap = require './hashmap'
+Environment = require './symboltable'
 
 types = {}
 register = (ast, compiler) ->
@@ -17,44 +16,6 @@ get = (ast) ->
   else
     throw new Error("compiler:unknown_type: #{ast.type()}")
 
-class Environment 
-  # strictly speaking we don't need prev? but it's still nice to have it I think.
-  constructor: (@prev = null) ->
-    @dupes = {}
-    @inner = new Hashmap
-      hashCode: util.hashCode
-  has: (key) ->
-    if @inner.has key
-      true 
-    else if @prev 
-      @prev.has key 
-    else 
-      false
-  get: (key) ->
-    if @inner.has key
-      @inner.get key
-    else if @prev
-      @prev.get key 
-    else
-      throw new Error("escompile:unknown_identifier: #{key}")
-  alias: (key) -> 
-    if @has key 
-      @get key
-    else 
-      newKey = @newKey key 
-      @inner.set key, newKey
-      newKey
-  newKey: (key) -> 
-    name = key.value
-    if not @dupes.hasOwnProperty(name)
-      @dupes[name] = 0
-    else
-      @dupes[name]++ 
-    if @dupes[name] == 0
-      esnode.identifier(name)
-    else
-      esnode.identifier(name + "$" + @dupes[name])
-  
 compile = (ast) ->
   node = _compile ast, new Environment()
   '(' + escodegen.generate(node)  + ')'
@@ -157,9 +118,10 @@ _local = (ast, env) ->
 register AST.get('local'), _local
 
 _ref = (ast, env) ->
-  if not ast.value 
-    throw new Error("escompile.ref.no_value: #{ast}")
-  if ast.value.type() == 'proxyval'
+  #if not ast.value 
+  #  throw new Error("escompile.ref.no_value: #{ast}")
+  #console.log 'ESCompile.ref', ast, ast.isDefine, ast.value
+  if ast.value?.type() == 'proxyval'
     _compile ast.value, env
   else if ast.isDefine
     esnode.funcall esnode.member(_compile(AST.moduleID, env), esnode.identifier('get')), 

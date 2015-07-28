@@ -15,6 +15,8 @@ get = (ast) ->
   else
     throw new Error("DEFINE.invalid_type: #{ast.type()}")
 
+# our goal is simple... we want to determine a list of references that are not defined within the scope of 
+# the procedure... 
 transform = (ast) -> 
   defines = []
   _trans ast, defines
@@ -25,7 +27,18 @@ _trans = (ast, defines) ->
   proc ast, defines
 
 _toplevel = (ast, defines) ->
-  
+  # truthfully this is probably the only thing that are truly needed... 
+  # the next step is to take each of the procedure and see if they can be normalized... 
+  console.log 'DEFINES._toplevel', ast.body
+  for item, i in (if ast.body.type() == 'block' then ast.body.items else [ ast.body ]) # is it true that 
+    if item.type() == 'define'
+      if item.value.type() == 'procedure'
+        defines.push item 
+  # at the end we have a list of the items that we really need to deal with here... 
+  defines
+
+register AST.get('toplevel'), _toplevel
+register AST.get('module'), _toplevel
 
 _scalar = (ast) -> 
 
@@ -58,8 +71,6 @@ register AST.get('member'), _member
 _body = (ast, defines) -> 
   _trans ast.body, defines
 
-register AST.get('toplevel'), _body
-register AST.get('module'), _body
 register AST.get('procedure'), _body
 register AST.get('task'), _body
 register AST.get('catch'), _body

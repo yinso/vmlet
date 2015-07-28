@@ -1,7 +1,9 @@
+util = require './util'
+
 # expects hashCode and equals
 class HashMap
   @defaultOptions:
-    hashCode: (v) -> v.hashCode()
+    hashCode: util.hashCode
     equals: (k, v) -> k == v
   constructor: (options = {}) ->
     Object.defineProperty @, 'buckets',
@@ -50,6 +52,18 @@ class HashMap
       true 
     else
       false
+  keys: () -> 
+    keys = []
+    for hasCode, bucket of (@buckets or {})
+      for {key, val} in bucket 
+        keys.push key
+    keys
+  values: () -> 
+    vals = []
+    for hasCode, bucket of (@buckets or {})
+      for {key, val} in bucket 
+        vals.push val
+    vals
   
 module.exports = HashMap 
   
