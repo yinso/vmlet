@@ -1,14 +1,11 @@
-util = require './util'
+AST = require './ast'
 Hashmap = require './hashmap'
-esnode = require './esnode'
-TR = require './trace'
 
 class SymbolTable 
   # strictly speaking we don't need prev? but it's still nice to have it I think.
   constructor: (@prev = null) ->
     @dupes = {}
-    @inner = new Hashmap
-      hashCode: util.hashCode
+    @inner = new Hashmap()
   has: (key) ->
     if @inner.has key
       true 
@@ -38,8 +35,8 @@ class SymbolTable
     else
       @dupes[name]++ 
     if @dupes[name] == 0
-      esnode.identifier(name)
+      AST.symbol name
     else
-      esnode.identifier(name + "$" + @dupes[name])
+      AST.symbol "#{name}$#{@dupes[name]}"
 
 module.exports = SymbolTable
