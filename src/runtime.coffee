@@ -15,7 +15,7 @@ util = require './util'
 TR = require './trace'
 async = require 'async'
 
-compiler = require './escompile'
+compiler = require './escompiler'
 
 fs = require 'fs'
 
