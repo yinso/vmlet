@@ -1,6 +1,5 @@
 escodegen = require 'escodegen'
 AST = require './ast'
-TR = require './trace'
 Environment = require './symboltable'
 
 class ESCompiler
@@ -9,7 +8,7 @@ class ESCompiler
       @reg = new @()
     @reg.compile ast 
   compile: (ast) -> 
-    node = @run ast, new Environment()
+    node = @run ast, Environment.make()
     '(' + escodegen.generate(node)  + ')'
   run: (ast, env, res) -> 
     type = "_#{ast.type()}"
@@ -195,7 +194,7 @@ class ESCompiler
           throw new Error("escompile.define:unknown_name_type: #{ast.name}")
     value = 
       @funcall @member(@run(AST.moduleID, env), @identifier('define')),
-        [ name , @run(ast.value, new Environment(env)) ]
+        [ name , @run(ast.value, env.pushEnv()) ]
     id = 
       switch ast.name.type()
         when 'ref'

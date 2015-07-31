@@ -9,6 +9,8 @@ TR = require './trace'
 # how do we do that? 
 # 1 - we need to 
 class Environment 
+  @make: () -> 
+    new @()
   constructor: () -> 
     @inner = new Hashmap
       hashCode: util.hashCode 
@@ -33,7 +35,7 @@ class CloneRegistry
     @reg.transform ast 
   constructor: () -> 
   transform: (ast) -> 
-    @run ast, new Environment()
+    @run ast, Environment.make()
   run: (ast, env) -> 
     type = "_#{ast.type()}"
     if @[type]
@@ -123,6 +125,9 @@ class CloneRegistry
         @run param, env 
     decl = AST.procedure name, params
     decl.body = @run ast.body, env 
+    decl.frees = 
+      for free in ast.frees or []
+        @run free, env
     name.value = decl
     decl
   _task: (ast, env) -> 

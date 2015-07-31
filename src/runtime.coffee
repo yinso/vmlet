@@ -54,8 +54,8 @@ class Session
 
 class Module 
   @fromPrev: (name, prevEnv) ->
-    new @ name, new Environment prevEnv
-  constructor: (@name , @env = new Environment()) ->
+    new @ name, prevEnv.pushEnv()
+  constructor: (@name , @env = Environment.make()) ->
     @inner = {}
     @imports = {}
     @exports = {}
@@ -100,7 +100,7 @@ class Toplevel
 # we want something that signifies the global module and that's the baseEnv...
 # when we define a module we not only want to define 
 class Runtime
-  constructor: (@baseEnv = new Environment(), @main = Module.fromPrev(':main', @baseEnv)) ->
+  constructor: (@baseEnv = Environment.make(), @main = Module.fromPrev(':main', @baseEnv)) ->
     @modules = {}
     @envs = {}
     @parser = parser
@@ -219,7 +219,7 @@ class Runtime
         else
           try # this isn't really trying to 
             parsed = AST.module AST.string(spec), @parse data 
-            @envs[spec] = new Environment @baseEnv
+            @envs[spec] = @baseEnv.pushEnv()
             @evalParsed parsed, @envs[spec], (err, module) =>
               if err 
                 cb err

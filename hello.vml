@@ -21,5 +21,13 @@ define func odd(n)
   else
     even(n - 1)
 
+
+define test = 
+  let (y = 2) {
+    func test(x) {
+      x + y 
+    }
+  }
+
 export fib, odd, even
 

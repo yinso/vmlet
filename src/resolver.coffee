@@ -6,11 +6,11 @@ TR = require './trace'
 FreeVariable = require './freevariable'
 
 class Resolver 
-  @transform: (ast, env = new Environment()) -> 
+  @transform: (ast, env = Environment.make()) -> 
     if not @reg
       @reg = new @()
     @reg.transform ast, env
-  transform: (ast, env = new Environment()) -> 
+  transform: (ast, env = Environment.make()) -> 
     switch ast.type()
       when 'toplevel', 'module'
         resolved = @run ast.body, env 
@@ -43,7 +43,7 @@ class Resolver
     # block doesn't introduce new scoping... 
     # maybe that's better... hmm...
     # function and let introduce new scoping.
-    #newEnv = new Environment env
+    #newEnv = env.pushEnv()
     # first pull out all of the defines. 
     for item, i in ast.items 
       if item.type() == 'define'
@@ -112,7 +112,7 @@ class Resolver
     ast
   @makeProc: (type) ->
     (ast, env) ->
-      newEnv = new Environment env
+      newEnv = env.pushEnv()
       params = 
         for param in ast.params
           @run param, newEnv
@@ -128,6 +128,7 @@ class Resolver
           decl.name = ref
       decl.body = @run ast.body, newEnv
       decl.frees = FreeVariable.transform decl, newEnv
+      TR.log '-- resolver.make.proc', decl.name, decl.frees
       decl
   _procedure: @makeProc('procedure')
   _task: @makeProc('task')
@@ -135,7 +136,7 @@ class Resolver
     exp = @run ast.value, env
     AST.throw exp
   _catch: (ast, env) ->
-    newEnv = new Environment env
+    newEnv = env.pushEnv()
     ref = newEnv.defineParam ast.param
     body = @run ast.body, newEnv
     AST.catch ast.param, body
@@ -143,7 +144,7 @@ class Resolver
     body = _transform ast.body, env
     AST.finally body
   _try: (ast, env) ->
-    newEnv = new Environment env
+    newEnv = env.pushEnv()
     body = @run ast.body, newEnv
     catches = 
       for c in ast.catches
@@ -169,7 +170,7 @@ class Resolver
           AST.binding(env.get(binding.spec), binding.as)
     AST.export(bindings)
   _let: (ast, env) ->
-    newEnv = new Environment env
+    newEnv = env.pushEnv()
     defines = 
       for define in ast.defines 
         @run define , newEnv

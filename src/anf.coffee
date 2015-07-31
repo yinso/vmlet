@@ -5,6 +5,8 @@ T = require './transformer'
 TR = require './trace'
 
 class Environment 
+  @make: () -> 
+    new @()
   constructor: () -> 
     @inner = new Hashmap()
     @temp = 0
@@ -31,6 +33,10 @@ class Environment
     ref = @alias sym
     ref.value = ast
     ref
+  pushEnv: () -> 
+    newEnv = @constructor.make()
+    newEnv.prev = @ 
+    newEnv
   toString: () -> 
     "<env>"
 
@@ -39,7 +45,7 @@ class AnfRegistry
     if not @reg
       @reg = new @()
     @reg.transform ast 
-  transform: (ast, env = new Environment(), block = AST.block()) -> 
+  transform: (ast, env = Environment.make(), block = AST.block()) -> 
     res = @runInner ast, env, block
     T.transform res
   runInner: (ast, env, block = AST.block()) ->
@@ -144,10 +150,10 @@ class AnfRegistry
           switch exp.type()
             when 'define', 'local'
               ref.value = exp.value
-              block.push AST.local(ref, exp.value)
+              return block.push AST.local(ref, exp.value)
             else
               ref.value = exp
-              block.push AST.local(ref, exp)
+              return block.push AST.local(ref, exp)
     else
       ref.value = res
       cloned = AST.local ref, res 
@@ -181,7 +187,7 @@ class AnfRegistry
     @assign AST.taskcall(funcall, args), env, block
   @_proc: (type) ->
     (ast, env, block) ->
-      #newEnv = new Environment env
+      #newEnv = Environment.pushEnv env
       newEnv = env
       ref = 
         if ast.name 
@@ -195,6 +201,13 @@ class AnfRegistry
       if ref 
         ref.value = proc 
       proc.body = @runInner ast.body, newEnv 
+      # this free variables needs to be handled as early as possible or we will need to have it passed 
+      # at every stage... 
+      # another way is to handle it as late as possible, i.e. generate it only when needed... 
+      # in that case we will lose the information we have during resolver...
+      proc.frees = 
+        for ref in ast.frees 
+          @run ref, newEnv
       block.push T.transform(proc)
   _procedure: @_proc('procedure')
   _task: @_proc('task')
@@ -208,18 +221,18 @@ class AnfRegistry
     exp = @run ast.value, env, block
     block.push AST.throw exp
   _catch: (ast, env, block) ->
-    #newEnv = new Environment env
+    #newEnv = Environment.pushEnv env
     newEnv = env
     param = @run ast.param, newEnv
     body = @run ast.body, newEnv
     AST.catch param, body
   _finally: (ast, env, block) ->
-    #newEnv = new Environment env
+    #newEnv = Environment.pushEnv env
     newEnv = env
     body = @transform ast.body, newEnv
     AST.finally body
   _try: (ast, env, block) ->
-    #newEnv = new Environment env
+    #newEnv = Environment.pushEnv env
     newEnv = env
     body = @run ast.body, newEnv
     catches = 
@@ -242,14 +255,17 @@ class AnfRegistry
         spec = @run binding.spec, env, block
         AST.binding spec, binding.as
     block.push AST.export bindings
-  _let = (ast, env, block) ->
-    #newEnv = new Environment env
+  _let: (ast, env, block) ->
+    #newEnv = Environment.pushEnv env
     newEnv = env
     defines = []
     for define in ast.defines
       res = @run define, newEnv
-      for exp in res.items
-        block.push exp
+      if res.type() == 'block'
+        for exp in res.items
+          block.push exp
+      else
+        block.push res
       #block.push res.items[0]
     body = @run ast.body , newEnv
     if body.type() == 'block'

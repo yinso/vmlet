@@ -2,6 +2,8 @@ AST = require './ast'
 Hashmap = require './hashmap'
 
 class SymbolTable 
+  @make: () -> 
+    new @()
   # strictly speaking we don't need prev? but it's still nice to have it I think.
   constructor: (@prev = null) ->
     @dupes = {}
@@ -38,5 +40,9 @@ class SymbolTable
       AST.symbol name
     else
       AST.symbol "#{name}$#{@dupes[name]}"
+  pushEnv: () -> 
+    newEnv = @constructor.make()
+    newEnv.prev = @
+    newEnv
 
 module.exports = SymbolTable

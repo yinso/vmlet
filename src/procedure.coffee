@@ -6,6 +6,8 @@ CLONE = require './clone'
 TCO = require './goto'
 
 class Environment 
+  @make: () -> 
+    new @()
   constructor: () -> 
     @inner = new HashMap()
   setProc: (proc) -> 
@@ -25,9 +27,13 @@ class Environment
     @inner.keys()
   values: () -> 
     @inner.values()
+  pushEnv: () -> 
+    newEnv = @constructor.make()
+    newEnv.prev = @
+    newEnv
 
 normalize = (ast) -> 
-  env = new Environment()
+  env = Environment.make()
   defines = getDefines ast, env
   results = 
     for def in defines 
@@ -56,7 +62,7 @@ getDefines = (ast, env) ->
 # in order to implement lambda lifting - we would need to determine which 
 # variables are 
 
-transform = (ast, env = new Environment()) -> 
+transform = (ast, env = Environment.make()) -> 
   # what do we want to do? return two values. 
   # 1 value tells us if we have a tail call. 
   # 2nd value gives us a set of recursions... 
@@ -69,15 +75,6 @@ transform = (ast, env = new Environment()) ->
     return ast
   procs = env.keys()
   _transformTailCall res , procs
-
-_combineProcs = (ast, procs) -> 
-  locals = []
-  for proc in procs 
-    if proc != ast 
-      locals.push AST.local(proc.name, proc)
-  body = 
-    AST.block locals.concat(if ast.body.type() == 'block' then ast.body.items else [ ast.body ])
-  CLONE.transform AST.procedure ast.name, ast.params, body
 
 _transformTailCall = (ast, procs) -> 
   res = TCO.transform ast, procs

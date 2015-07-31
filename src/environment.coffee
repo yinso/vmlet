@@ -18,6 +18,8 @@ tr = require './trace'
 # 
 
 class SymbolTable
+  @make: () -> 
+    new @()
   constructor: (@prev = null) ->
     @inner = {}
     @temp = 0
@@ -99,5 +101,9 @@ class SymbolTable
       count++
       current = current.prev
     count
+  pushEnv: () -> 
+    newEnv = @constructor.make()
+    newEnv.prev = @ 
+    newEnv
 
 module.exports = SymbolTable 
