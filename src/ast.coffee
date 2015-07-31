@@ -49,7 +49,14 @@ class AST
 AST.register class SYMBOL extends AST
   @type: 'symbol'
   @count: 0
-  constructor: (@value) ->
+  constructor: (value) ->
+    Object.defineProperty @, 'value', 
+      get: () -> value 
+      set: (v) -> 
+        if typeof(v) != 'string'
+          throw new Error("AST.symbol:requires_string: #{value} => #{v}")
+        value = v 
+    @value = value
     @count = @constructor.count++
   _equals: (v) ->
     @ == v

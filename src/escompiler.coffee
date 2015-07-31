@@ -8,7 +8,7 @@ class ESCompiler
       @reg = new @()
     @reg.compile ast 
   compile: (ast) -> 
-    node = @run ast, Environment.make()
+    node = @run ast, Environment.make({newSym: true})
     '(' + escodegen.generate(node)  + ')'
   run: (ast, env, res) -> 
     type = "_#{ast.type()}"
@@ -173,8 +173,8 @@ class ESCompiler
     runtimeID = @run(AST.runtimeID, env)
     @funcall @member(runtimeID, @identifier('member')), [ head , key ]
   _symbol: (ast, env) ->
-    sym = env.alias ast
-    @identifier sym.value
+    ref = env.alias ast
+    @identifier ref.name.value
   _object: (ast, env) ->
     @object ([key, @run(val, env)] for [key, val] in ast.value)
   _array: (ast, env) ->

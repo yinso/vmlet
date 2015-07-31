@@ -6,7 +6,7 @@ TR = require './trace'
 FreeVariable = require './freevariable'
 
 class Resolver 
-  @transform: (ast, env = Environment.make()) -> 
+  @transform: (ast, env = Environment.make({newSym: false})) -> 
     if not @reg
       @reg = new @()
     @reg.transform ast, env

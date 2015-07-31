@@ -3,42 +3,7 @@ Hashmap = require './hashmap'
 util = require './util'
 T = require './transformer'
 TR = require './trace'
-
-class Environment 
-  @make: () -> 
-    new @()
-  constructor: () -> 
-    @inner = new Hashmap()
-    @temp = 0
-  has: (key) -> 
-    @inner.has key 
-  get: (key) -> 
-    @inner.get key
-  set: (key, val) -> 
-    @inner.set key, val
-  alias: (key) -> 
-    if @has key 
-      @get key
-    else
-      ref = AST.ref key # AST.symbol(key.value) # this would have been a new symbol...
-      @set key, ref
-      ref # this returns a reference... 
-  gensym: (sym = null) ->
-    if sym 
-      AST.symbol "#{sym.value}$#{@temp++}"
-    else
-      AST.symbol "_$#{@temp++}"
-  defineTemp: (ast) -> 
-    sym = @gensym()
-    ref = @alias sym
-    ref.value = ast
-    ref
-  pushEnv: () -> 
-    newEnv = @constructor.make()
-    newEnv.prev = @ 
-    newEnv
-  toString: () -> 
-    "<env>"
+Environment = require './symboltable'
 
 class AnfRegistry
   @transform: (ast) -> 
@@ -212,9 +177,8 @@ class AnfRegistry
   _procedure: @_proc('procedure')
   _task: @_proc('task')
   _param: (ast, env, block) -> 
-    name = @run ast.name, env, block
-    param = AST.param name, ast.type, ast.default 
-    ref = env.alias name 
+    ref = @run ast.name, env, block
+    param = AST.param ref, ast.type, ast.default 
     ref.value = param 
     param
   _throw: (ast, env, block) ->
