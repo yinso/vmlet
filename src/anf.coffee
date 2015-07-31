@@ -34,16 +34,16 @@ class Environment
   toString: () -> 
     "<env>"
 
-class Registry
+class AnfRegistry
   @transform: (ast) -> 
     if not @reg
       @reg = new @()
     @reg.transform ast 
   transform: (ast, env = new Environment(), block = AST.block()) -> 
-    res = @_transInner ast, env, block
+    res = @runInner ast, env, block
     T.transform res
-  _transInner: (ast, env, block = AST.block()) ->
-    res = @_trans ast, env, block 
+  runInner: (ast, env, block = AST.block()) ->
+    res = @run ast, env, block 
     @_normalize res, block
     
   _normalize: (ast, block) -> 
@@ -64,7 +64,7 @@ class Registry
       else
         items.push item 
     AST.block items
-  _trans: (ast, env, block = AST.block()) -> 
+  run: (ast, env, block = AST.block()) -> 
     type = "_#{ast.type()}"
     if @[type]
       @[type](ast, env, block)
@@ -92,24 +92,24 @@ class Registry
     ref.value = ast.value
     block.push ref
   _binary: (ast, env, block) ->
-    lhs = @_trans ast.lhs, env, block
-    rhs = @_trans ast.rhs, env, block
+    lhs = @run ast.lhs, env, block
+    rhs = @run ast.rhs, env, block
     @assign AST.binary(ast.op, lhs, rhs), env, block
   _if: (ast, env, block) ->
-    cond = @_trans ast.cond, env, block
-    thenAST = @_transInner ast.then, env
-    elseAST = @_transInner ast.else, env
+    cond = @run ast.cond, env, block
+    thenAST = @runInner ast.then, env
+    elseAST = @runInner ast.else, env
     @assign AST.if(cond, thenAST, elseAST), env, block
   _block: (ast, env, block) ->
     for i in [0...ast.items.length - 1]
-      @_trans ast.items[i], env, block
-    res = @_trans ast.items[ast.items.length - 1], env, block
+      @run ast.items[i], env, block
+    res = @run ast.items[ast.items.length - 1], env, block
     res
   _define: (ast, env, block) ->
-    ref = @_trans ast.name, env, block
+    ref = @run ast.name, env, block
     if ref.type() == 'symbol'
       ref = env.get ref
-    res = @_transInner ast.value, env
+    res = @runInner ast.value, env
     #TR.log '--anf.define', ast, ref, res
     if res.type() == 'block'
       for exp, i in res.items
@@ -128,12 +128,12 @@ class Registry
       ref.value = exp
       block.push AST.define(ref, res)
   _local: (ast, env, block) ->
-    ref = @_trans ast.name, env, block
+    ref = @run ast.name, env, block
     if ref.type() == 'symbol'
       ref = env.get ref
     res = 
       if ast.value 
-        @_transInner ast.value, env
+        @runInner ast.value, env
       else
         ast.value 
     if res?.type() == 'block'
@@ -155,29 +155,29 @@ class Registry
   _object: (ast, env, block) ->
     keyVals = 
       for [key, val] in ast.value
-        v = @_trans val, env, block
+        v = @run val, env, block
         [key, v]
     @assign AST.object(keyVals), env, block
   _array: (ast, env, block) ->
     items = 
       for v in ast.value
-        @_trans v, env, block
+        @run v, env, block
     @assign AST.array(items), env, block
   _member: (ast, env, block) ->
-    head = @_trans ast.head, env, block
+    head = @run ast.head, env, block
     @assign AST.member(head, ast.key), env, block
   _funcall: (ast, env, block) ->
-    funcall = @_trans ast.funcall, env, block
+    funcall = @run ast.funcall, env, block
     args = 
       for arg in ast.args
-        @_trans arg, env, block
+        @run arg, env, block
     ast = AST.funcall funcall, args
     @assign ast, env, block
   _taskcall: (ast, env, block) ->
-    funcall = @_trans ast.funcall, env, block
+    funcall = @run ast.funcall, env, block
     args = 
       for arg in ast.args
-        @_trans arg, env, block
+        @run arg, env, block
     @assign AST.taskcall(funcall, args), env, block
   @_proc: (type) ->
     (ast, env, block) ->
@@ -185,33 +185,33 @@ class Registry
       newEnv = env
       ref = 
         if ast.name 
-          @_trans ast.name, newEnv 
+          @run ast.name, newEnv 
         else
           undefined
       params = 
         for p in ast.params
-          @_trans p, newEnv 
+          @run p, newEnv 
       proc = AST.make type, ref, params
       if ref 
         ref.value = proc 
-      proc.body = @_transInner ast.body, newEnv 
+      proc.body = @runInner ast.body, newEnv 
       block.push T.transform(proc)
   _procedure: @_proc('procedure')
   _task: @_proc('task')
   _param: (ast, env, block) -> 
-    name = @_trans ast.name, env, block
+    name = @run ast.name, env, block
     param = AST.param name, ast.type, ast.default 
     ref = env.alias name 
     ref.value = param 
     param
   _throw: (ast, env, block) ->
-    exp = @_trans ast.value, env, block
+    exp = @run ast.value, env, block
     block.push AST.throw exp
   _catch: (ast, env, block) ->
     #newEnv = new Environment env
     newEnv = env
-    param = @_trans ast.param, newEnv
-    body = @_trans ast.body, newEnv
+    param = @run ast.param, newEnv
+    body = @run ast.body, newEnv
     AST.catch param, body
   _finally: (ast, env, block) ->
     #newEnv = new Environment env
@@ -221,7 +221,7 @@ class Registry
   _try: (ast, env, block) ->
     #newEnv = new Environment env
     newEnv = env
-    body = @_trans ast.body, newEnv
+    body = @run ast.body, newEnv
     catches = 
       for c in ast.catches
         @_catch c, env, block
@@ -234,12 +234,12 @@ class Registry
   _import: (ast, env, block) ->
     defines = 
       for binding in ast.bindings
-        @_trans ast.define(binding), env, block
+        @run ast.define(binding), env, block
     block.push AST.unit()
   _export: (ast, env, block) ->
     bindings = 
       for binding in ast.bindings 
-        spec = @_trans binding.spec, env, block
+        spec = @run binding.spec, env, block
         AST.binding spec, binding.as
     block.push AST.export bindings
   _let = (ast, env, block) ->
@@ -247,21 +247,21 @@ class Registry
     newEnv = env
     defines = []
     for define in ast.defines
-      res = @_trans define, newEnv
+      res = @run define, newEnv
       for exp in res.items
         block.push exp
       #block.push res.items[0]
-    body = @_trans ast.body , newEnv
+    body = @run ast.body , newEnv
     if body.type() == 'block'
       for exp in body.items 
         block.push exp 
     else
       block.push body
   _toplevel: (ast, env, block) -> 
-    body = @_transInner ast.body, env, block 
+    body = @runInner ast.body, env, block 
     ast.clone AST.return(body)
   _module: (ast, env, block) -> 
-    body = @_transInner ast.body, env, block 
+    body = @runInner ast.body, env, block 
     ast.clone AST.return(body)
   
-module.exports = Registry
+module.exports = AnfRegistry

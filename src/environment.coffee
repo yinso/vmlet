@@ -35,6 +35,27 @@ class SymbolTable
     @_has sym
   _has: (sym) ->
     @inner.hasOwnProperty(sym.value)
+  isFreeVariable: (sym) -> 
+    # the idea is the following. 
+    # 0th level is global 
+    # 1st level is top 
+    # last level is current
+    # in between are the free variables. 
+    @_isFree sym, @level(), @level()
+  _isFree: (sym, level, topLevel) -> 
+    if @_has sym 
+      if level == topLevel
+        false 
+      else if level == 1 
+        false 
+      else if level == 0
+        false 
+      else 
+        true 
+    else if @prev 
+      @prev._isFree sym, level - 1, topLevel 
+    else # actually doesn't exist... throw error?
+      throw new Error("Environment:symbol_unreferenced: #{sym}")
   get: (sym) ->
     if @inner.hasOwnProperty(sym.value)
       @inner[sym.value]

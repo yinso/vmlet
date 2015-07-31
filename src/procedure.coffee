@@ -3,6 +3,7 @@ isTail = require './istail'
 TR = require './trace'
 HashMap = require './hashmap'
 CLONE = require './clone'
+TCO = require './goto'
 
 class Environment 
   constructor: () -> 
@@ -66,13 +67,8 @@ transform = (ast, env = new Environment()) ->
   res = _findTailCallProcs ast, env
   if not res 
     return ast
-  procs = env.values()
-  proc = 
-    if procs.length > 0 
-      _combineProcs res, procs 
-    else
-      res 
-  _transformTailcall proc  
+  procs = env.keys()
+  _transformTailCall res , procs
 
 _combineProcs = (ast, procs) -> 
   locals = []
@@ -83,20 +79,9 @@ _combineProcs = (ast, procs) ->
     AST.block locals.concat(if ast.body.type() == 'block' then ast.body.items else [ ast.body ])
   CLONE.transform AST.procedure ast.name, ast.params, body
 
-_extendProcParams = (ast) -> 
-  # we are going to create a new set of params with same name but different symbols... 
-  # let's 
-  newParams = 
-    for param in ast.params 
-      param.clone AST.symbol(param.name.value + "$")
-      #param.clone()
-  locals = 
-    for param, i in ast.params 
-      AST.local param.name, newParams[i].ref()
-  AST.procedure ast.name, newParams, 
-    AST.block locals.concat(if ast.body.type() == 'block' then ast.body.items else [ ast.body ])
-
-_transformTailcall = (ast) -> 
+_transformTailCall = (ast, procs) -> 
+  res = TCO.transform ast, procs
+  TR.log '--transform.tail.call', ast.name, res
   ast
 
 # we want to track stack?? I think that's the idea... 
@@ -118,18 +103,7 @@ filterDefines = (ast, refs, env) ->
       env.delete ref 
     else
       env.setRef ref 
-  env.values()
-
-importDefines = (ast, filtered) -> 
-  defines = 
-    for proc in filtered 
-      proc.local()
-  body = 
-    if ast.body.type() == 'block'
-      AST.block defines.concat(ast.body.items)
-    else
-      AST.block defines.concat(ast.body)
-  AST.procedure ast.name, ast.params, body
+  env.values() # get back the refs? 
 
 module.exports = 
   normalize: normalize

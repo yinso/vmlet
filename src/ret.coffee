@@ -86,6 +86,45 @@ T.register 'return', ($r) ->
 , ($r, $defines , $body) -> 
   AST.let $defines, T.transform AST.return($body)
 
+T.register 'return', ($r) -> 
+  if $r.value.type() == 'while'
+    [ $r.value.cond, $r.value.block ]
+, ($r, $cond, $block) -> 
+  AST.while $cond, T.transform AST.return($block)
+
+T.register 'return', ($r) -> 
+  if $r.value.type() == 'switch'
+    [ $r.value.cond , $r.value.cases ]
+, ($r, $cond, $cases) -> 
+  AST.switch $cond, (T.transform(AST.return(c)) for c in $cases)
+
+T.register 'return', ($r) -> 
+  if $r.value.type() == 'case'
+    [ $r.value.cond, $r.value.exp ]
+, ($r, $cond, $exp) -> 
+  # this one is where things are a bit hard... we want to make sure that if the last statement is *break* we do not 
+  # return... 
+  # I guess that can be done 
+  AST.case $cond, T.transform(AST.return($exp))
+
+T.register 'return', ($r) -> 
+  if $r.value.type() == 'defaultCase'
+    [ $r.value.exp ]
+, ($r, $exp) -> 
+  AST.defaultCase T.transform(AST.return($exp))
+  
+T.register 'return', ($r) -> 
+  if $r.value.type() == 'break'
+    [ $r.value ]
+, ($r, $break) -> 
+  $break
+
+T.register 'return', ($r) -> 
+  if $r.value.type() == 'continue'
+    [ $r.value ]
+, ($r, $continue) -> 
+  $continue
+
 T.register 'local', ($l) -> 
   if not $l.value
     return false
@@ -195,6 +234,7 @@ T.register 'assign', ($a) ->
 T.register 'procedure', ($p) -> 
   [ $p.name , $p.params, $p.body , $p.returns ]
 , ($p, $name, $params, $body, $returns) -> 
+  ###
   newParams = 
     for param in $params 
       CLONE.transform param
@@ -206,14 +246,15 @@ T.register 'procedure', ($p) ->
       AST.block locals.concat($body.items)
     else
       AST.block locals.concat($body)
-  body = T.transform AST.return(body)
+  ###
+  body = T.transform AST.return($body)
   body = 
     if body.type() == 'block'
       body
     else
       AST.block [ body ]
   # this make sure that we don't lose the references that points to this procedure.
-  $p.params = newParams 
+  #$p.params = newParams 
   $p.body = body
   TCO.transform $p
 

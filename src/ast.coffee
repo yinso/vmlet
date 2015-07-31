@@ -286,7 +286,7 @@ AST.register class REF extends AST
   @type: 'ref'
   constructor: (@name, @value, @level) ->
     @isDefine = false
-  _equals: (v) -> @ == v
+  _equals: (v) -> @name.equals(v.name)
   isAsync: () -> false
   isPlaceholder: () ->
     not @value
@@ -806,7 +806,7 @@ These are used for tail call transformations.
 
 ###
 
-AST.register class VAR extends AST 
+AST.register class DECLARE extends AST 
   @type: 'var'
   constructor: (@name) ->
   _pretty: (level, dupe) -> 

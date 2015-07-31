@@ -26,15 +26,15 @@ class Environment
       @set key, ref
       ref # this returns a reference... 
 
-class Registry 
+class CloneRegistry
   @transform: (ast) -> 
     if not @reg 
       @reg = new @()
     @reg.transform ast 
   constructor: () -> 
   transform: (ast) -> 
-    @_trans ast, new Environment()
-  _trans: (ast, env) -> 
+    @run ast, new Environment()
+  run: (ast, env) -> 
     type = "_#{ast.type()}"
     if @[type]
       @[type](ast, env)
@@ -52,94 +52,93 @@ class Registry
     env.alias ast.name 
   _define: (ast, env) -> 
     # first thing is to ref 
-    ref = @_trans ast.name, env
+    ref = @run ast.name, env
     # we now have a ref... we 
-    cloned = @_trans ast.value, env 
+    cloned = @run ast.value, env 
     ref.value = cloned 
     AST.define ref, cloned 
   _local: (ast, env) -> 
-    ref = @_trans ast.name, env 
-    cloned = @_trans ast.value, env 
+    ref = @run ast.name, env 
+    cloned = @run ast.value, env 
     ref.value = cloned 
     AST.local ref, cloned 
   _assign: (ast, env) -> 
-    ref = @_trans ast.name, env 
-    cloned = @_trans ast.value, env 
+    ref = @run ast.name, env 
+    cloned = @run ast.value, env 
     ref.value = cloned 
     AST.local ref, cloned 
   _if: (ast, env) -> 
-    cond = @_trans ast.cond, env 
-    thenAST = @_trans ast.then, env
-    elseAST = @_trans ast.else, env 
+    cond = @run ast.cond, env 
+    thenAST = @run ast.then, env
+    elseAST = @run ast.else, env 
     AST.if cond, thenAST, elseAST 
   _binary: (ast, env) -> 
-    lhs = @_trans ast.lhs, env 
-    rhs = @_trans ast.rhs, env 
+    lhs = @run ast.lhs, env 
+    rhs = @run ast.rhs, env 
     AST.binary ast.op, lhs, rhs
   _member: (ast, env) -> 
-    head = @_trans ast.head, env 
-    key = @_trans ast.key, env 
+    head = @run ast.head, env 
+    key = @run ast.key, env 
     AST.member head, key
   _array: (ast, env) -> 
     items = 
       for item in ast.value 
-        @_trans item, env 
+        @run item, env 
     AST.array items 
   _object: (ast, env) -> 
     keyvals = 
       for [ key , val ] in ast.value 
         [ 
           key 
-          @_trans(val, env)
+          @run(val, env)
         ]
     AST.object keyvals
   _block: (ast, env) -> 
     AST.block (for item in ast.items 
-        @_trans item, env) 
+        @run item, env) 
   _funcall: (ast, env) -> 
-    funcall = @_trans ast.funcall, env 
+    funcall = @run ast.funcall, env 
     args = 
       for arg in ast.args 
-        @_trans arg, env 
+        @run arg, env 
     AST.funcall funcall, args 
   _taskcall: (ast, env) -> 
-    taskcall = @_trans ast.funcall, env 
+    taskcall = @run ast.funcall, env 
     args = 
       for arg in ast.args 
-        @_trans arg, env 
+        @run arg, env 
     AST.taskcall taskcall, args
   _param: (ast, env) -> 
-    name = @_trans ast.name, env 
+    name = @run ast.name, env 
     param = AST.param name, ast.paramType, ast.default
     param
   _procedure: (ast, env) -> 
     name = 
       if ast.name 
-        @_trans ast.name, env 
+        @run ast.name, env 
       else
         ast.name 
     params = 
       for param in ast.params 
-        @_trans param, env 
+        @run param, env 
     decl = AST.procedure name, params
-    #TR.log '-- procedure.clone.decl', decl
-    decl.body = @_trans ast.body, env 
+    decl.body = @run ast.body, env 
     name.value = decl
     decl
   _task: (ast, env) -> 
     name = 
       if ast.name 
-        @_trans ast.name, env 
+        @run ast.name, env 
       else
         ast.name 
     params = 
       for param in ast.params 
-        @_trans param, env 
+        @run param, env 
     decl = AST.task name, params
-    decl.body = @_trans ast.body, env 
+    decl.body = @run ast.body, env 
     name.value = decl
     decl
   _return: (ast, env) -> 
-    AST.return @_trans(ast.value, env)
+    AST.return @run(ast.value, env)
 
-module.exports = Registry
+module.exports = CloneRegistry
