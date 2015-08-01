@@ -1,36 +1,9 @@
 AST = require './ast'
 isTail = require './istail'
 TR = require './trace'
-HashMap = require './hashmap'
 CLONE = require './clone'
 TCO = require './goto'
-
-class Environment 
-  @make: () -> 
-    new @()
-  constructor: () -> 
-    @inner = new HashMap()
-  setProc: (proc) -> 
-    @set proc.name, proc
-  setRef: (ref) -> 
-    @set ref, ref.value
-  setDefine: (def) -> 
-    @set def.name, def.value
-  has: (ref) -> 
-    @inner.has ref 
-  set: (key, val) -> 
-    @inner.set key, val
-    @
-  delete: (ref) -> 
-    @inner.delete ref
-  keys: () -> 
-    @inner.keys()
-  values: () -> 
-    @inner.values()
-  pushEnv: () -> 
-    newEnv = @constructor.make()
-    newEnv.prev = @
-    newEnv
+Environment = require './symboltable'
 
 normalize = (ast) -> 
   env = Environment.make()

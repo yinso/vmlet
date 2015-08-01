@@ -1,32 +1,5 @@
 AST = require './ast'
-Hashmap = require './hashmap'
-util = require './util'
-TR = require './trace'
-
-# what do we want? 
-# in many ways we just did something that's quite useless. 
-# we want to swap out the symbols, as well as the REFs.
-# how do we do that? 
-# 1 - we need to 
-class Environment 
-  @make: () -> 
-    new @()
-  constructor: () -> 
-    @inner = new Hashmap
-      hashCode: util.hashCode 
-  has: (key) -> 
-    @inner.has key 
-  get: (key) -> 
-    @inner.get key
-  set: (key, val) -> 
-    @inner.set key, val
-  alias: (key) -> 
-    if @has key 
-      @get key
-    else
-      ref = AST.ref AST.symbol(key.value)
-      @set key, ref
-      ref # this returns a reference... 
+Environment = require './symboltable'
 
 class CloneRegistry
   @transform: (ast) -> 
@@ -35,7 +8,7 @@ class CloneRegistry
     @reg.transform ast 
   constructor: () -> 
   transform: (ast) -> 
-    @run ast, Environment.make()
+    @run ast, Environment.make {newSym: true}
   run: (ast, env) -> 
     type = "_#{ast.type()}"
     if @[type]

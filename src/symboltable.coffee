@@ -26,6 +26,8 @@ class SymbolTable
       @prev.get key 
     else
       throw new Error("SymbolTable:unknown_identifier: #{key}")
+  set: (key, val) -> 
+    @inner.set key, val
   alias: (key) -> 
     if @has key 
       @get key
@@ -63,7 +65,19 @@ class SymbolTable
     newEnv = @constructor.make(@options)
     newEnv.prev = @
     newEnv
+  delete: (key) -> 
+    @inner.delete key
+  keys: () -> 
+    @inner.keys()
+  values: () -> 
+    @inner.values()
   toString: () -> 
     "<env>"
+  setProc: (proc) -> 
+    @set proc.name, proc
+  setRef: (ref) -> 
+    @set ref, ref.value
+  setDefine: (def) -> 
+    @set def.name, def.value
 
 module.exports = SymbolTable
