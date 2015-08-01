@@ -6,7 +6,7 @@ TCO = require './goto'
 Environment = require './symboltable'
 
 normalize = (ast) -> 
-  env = Environment.make()
+  env = Environment.make({newSym: false})
   defines = getDefines ast, env
   results = 
     for def in defines 
