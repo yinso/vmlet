@@ -5,7 +5,7 @@ T = require './transformer'
 TR = require './trace'
 Environment = require './symboltable'
 
-class AnfRegistry
+class AnfTransformer
   @transform: (ast) -> 
     if not @reg
       @reg = new @()
@@ -107,6 +107,7 @@ class AnfRegistry
         @runInner ast.value, env
       else
         ast.value 
+    #TR.log 'ANF.local.res', ast, res
     if res?.type() == 'block'
       for exp, i in res.items 
         if i < res.items.length - 1 
@@ -115,7 +116,9 @@ class AnfRegistry
           switch exp.type()
             when 'define', 'local'
               ref.value = exp.value
-              return block.push AST.local(ref, exp.value)
+              result = block.push AST.local(ref, exp.value)
+              #TR.log '-- ANF.local.res.block', ast, block
+              return result 
             else
               ref.value = exp
               return block.push AST.local(ref, exp)
@@ -224,13 +227,8 @@ class AnfRegistry
     newEnv = env
     defines = []
     for define in ast.defines
-      res = @run define, newEnv
-      if res.type() == 'block'
-        for exp in res.items
-          block.push exp
-      else
-        block.push res
-      #block.push res.items[0]
+      @run define, newEnv, block
+    #TR.log '-- ANF.let', ast, defines
     body = @run ast.body , newEnv
     if body.type() == 'block'
       for exp in body.items 
@@ -244,4 +242,4 @@ class AnfRegistry
     body = @runInner ast.body, env, block 
     ast.clone AST.return(body)
   
-module.exports = AnfRegistry
+module.exports = AnfTransformer

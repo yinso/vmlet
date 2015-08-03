@@ -106,6 +106,264 @@ That means until we can do so, we are stuck with one of the approaches...
 
 ###
 
+class CpsTransformer 
+  @transform: (ast) -> 
+    if not @reg 
+      @reg = new @()
+    @reg.transform ast 
+  transform: TR.trace('CPS.transform', (ast) -> 
+    res = 
+      switch ast.type()
+        when 'task'
+          @_task ast 
+        when 'toplevel', 'module'
+          @_toplevel ast 
+        else
+          throw new Error("CPS:unsupported_toplevel: #{ast}")
+    res
+    )
+  run: (ast, contAST, cbAST) ->
+    type = "_#{ast.type()}"
+    if @[type]
+      @[type] ast, contAST, cbAST
+    else
+      throw new Error("CPS:unknown_ast_type: #{ast.type()}")
+  normalize: (ast) -> 
+    if ast.type() == 'block'
+      ast
+    else
+      AST.block [ ast ]
+  combine: (ast, contAST) ->
+    if not contAST
+      ast
+    else if contAST.type() == 'block'
+      AST.block [ ast ].concat(contAST.items)
+    else
+      AST.block [ ast, contAST ]
+  concat: (ast1, ast2) ->
+    is1anf = ast1.type() == 'block'
+    is2anf = ast2.type() == 'block'
+    if is1anf
+      AST.block ast1.items.concat(if is2anf then ast2.items else [ ast2 ])
+    else
+      AST.block [ ast1 ].concat(if is2anf then ast2.items else [ ast2 ])
+  makeCallback: (contAST, cbAST, resParam = AST.param(AST.symbol('res'))) ->
+    err = AST.symbol('err')
+    if contAST == cbAST
+      contAST
+    else
+      # this part needs to be ANF-ized...
+      AST.procedure(undefined,
+        [
+          AST.param(err)
+          resParam
+        ],
+        AST.block([AST.if(err,
+          AST.return(AST.funcall(cbAST, [ err ])),
+          contAST
+        )])
+      )
+  _toplevel: (ast) ->
+    body = @normalize ast.body 
+    #console.log 'cps.toplevel', ast.body, body
+    params = [ ast.moduleParam ]
+    cbAST = ast.callbackParam.ref()
+    task = @_task AST.task(null, params, body), cbAST, cbAST
+    ast.clone task.body
+  _task: (ast, contAST, cbAST) ->
+    body = @normalize ast.body
+    params = [].concat(ast.params).concat(ast.callbackParam)
+    #console.log '--cpTask', ast.body, body
+    body = 
+      if body.items[0].type() == 'try'
+          @run(body, cbAST, cbAST)
+      else
+        AST.try(
+          @run(body, cbAST, cbAST), 
+          [ 
+            AST.catch(
+              ast.errorParam, 
+              AST.block(
+                [
+                  AST.return(AST.funcall(
+                    cbAST, 
+                    [ 
+                      ast.errorParam.ref()
+                    ]))
+                ]
+              )
+            )
+          ], 
+          null
+        )
+    AST.procedure(
+      ast.name,
+      params,
+      AST.block(
+        [
+          body
+        ]
+      )
+    )
+  _block: (anf, contAST, cbAST) ->
+    for i in [anf.items.length - 1 ..0] by -1
+      contAST = @run anf.items[i], contAST, cbAST
+    @normalize contAST
+  _taskcall: (ast, contAST, cbAST) ->
+    args = [].concat(ast.args)
+    # console.log '--_taskcall', ast, contAST, cbAST
+    if contAST.type() == 'procedure'
+      args.push contAST
+    else
+      args.push @makeCallback contAST, cbAST
+    AST.return(AST.funcall(ast.funcall, args))
+  _local: (ast, contAST, cbAST) ->
+    TR.log "--cps.local", ast, contAST
+    if ast.isAsync()
+      @run ast.value, @makeCallback(contAST, cbAST, AST.param(ast.name)), cbAST
+    else
+      #head = AST.local ast.name, _cpsOne(ast.value, null, null)
+      @combine ast, contAST
+  _assign: (ast, contAST, cbAST) ->
+    #TR.log "--cps.assign", ast, contAST
+    if ast.isAsync()
+      @run ast.value, @makeCallback(contAST, cbAST, AST.param(ast.name)), cbAST
+    else
+      head = AST.assign ast.name, @run(ast.value, null, null)
+      @combine head, contAST
+  _define: (ast, contAST, cbAST) ->
+    #console.log "--cps.#{type}", ast, ast.isAsync(), contAST, cbAST
+    if ast.isAsync()
+      param = AST.param ast.name.clone()
+      contAST = @combine AST.define(ast.name, param.name), contAST
+      @run ast.value, @makeCallback(contAST, cbAST, param), cbAST
+    else
+      head = AST.make('define', 
+        ast.name,
+        @run(ast.value, null, null)
+      )
+      @combine head, contAST
+  _return: (ast, contAST, cbAST) ->
+    #type = exp.type() # for dealing with none 
+    #TR.log '--cps.return', ast, contAST
+    val = ast.value
+    if val.type() == 'taskcall'
+      @_taskcall val, contAST, cbAST
+    #else if val.type() == 'task'
+      # the idea here is that we want to compile a single value...
+    else
+      AST.return(AST.funcall(cbAST,
+          [ 
+            AST.make('null')
+            @run(val, null, null)
+            # I need a way to deal with there isn't anything at the end...
+          ]
+        )
+      )
+  _if: (ast, contAST, cbAST) ->
+    AST.if(ast.cond,
+      @run(ast.then, contAST, cbAST),
+      @run(ast.else, contAST, cbAST)
+    )
+  _number: (ast, contAST, cbAST) ->
+    @combine ast, contAST
+  _string: (ast, contAST, cbAST) ->
+    @combine ast, contAST
+  _bool: (ast, contAST, cbAST) ->
+    @combine ast, contAST
+  _null: (ast, contAST, cbAST) ->
+    @combine ast, contAST
+  _unit: (ast, contAST, cbAST) ->
+    @combine ast, contAST
+  _symbol: (ast, contAST, cbAST) ->
+    @combine ast, contAST
+  _binary: (ast, contAST, cbAST) ->
+    @combine ast, contAST
+  _procedure: (ast, contAST, cbAST) ->
+    @combine ast, contAST
+  _member: (ast, contAST, cbAST) ->
+    @combine ast, contAST
+  _ref: (ast, contAST, cbAST) ->
+    @combine ast, contAST
+  _proxyval: (ast, contAST, cbAST) ->
+    @combine ast, contAST
+  _var: (ast, contAST, cbAST) ->
+    @combine ast, contAST
+  _funcall: (ast, contAST, cbAST) ->
+    @combine ast, contAST
+  _array: (ast, contAST, cbAST) ->
+    @combine ast, contAST
+  _object: (ast, contAST, cbAST) ->
+    @combine ast, contAST
+  _import: (ast, contAST, cbAST) ->
+    @combine ast, contAST
+  _export: (ast, contAST, cbAST) ->
+    @combine ast, contAST
+  _throw: (ast, contAST, cbAST) ->
+    AST.return AST.funcall(cbAST, [ ast.value ])
+  makeErrorHandler: (catchExp, finallyExp, cbAST, name) ->
+    # console.log '--cps.makeErrorHandler', catchExp?.body, finallyExp?.body, cbAST
+    catchBody = @run catchExp.body, cbAST, cbAST
+    errParam = catchExp.param
+    resParam = AST.param(AST.symbol('res'))
+    okReturnExp = AST.return(AST.funcall(cbAST, [ errParam.name , resParam.name ]))
+    errorBody = 
+      if finallyExp 
+        AST.try(
+          @run(finallyExp.body, catchBody, catchBody)
+          [ 
+            AST.catch(
+              errParam,
+              AST.block([
+                okReturnExp 
+              ])
+            )
+          ]
+        )
+      else
+        catchBody 
+    body = 
+      AST.block([
+        AST.if(
+          errParam.name
+          errorBody
+          okReturnExp
+        )
+      ])
+    AST.local name, AST.procedure(undefined, [ catchExp.param , resParam ], body)
+  _try: (ast, contAST, cbAST) ->
+    name = AST.symbol('__handleError', 1)
+    # console.log '--_try', ast.catches[0], ast.finally
+    catchExp = 
+      if ast.catches.length > 0
+        ast.catches[0]
+      else
+        # this thing creates a new parameter... we need a way to create parameters without 
+        # having the parameter being global... 
+        AST.catch()
+    errorAST = @makeErrorHandler catchExp, ast.finally, cbAST, name
+    cbAST = name
+    bodyAST = @run ast.body, contAST, cbAST
+    tryBody = @combine errorAST, bodyAST 
+    finalCatch = AST.catch()
+    finalCatch.body = AST.block [
+        AST.return(AST.funcall(errorAST.name, [ finalCatch.param.name ]))
+      ]
+    AST.try(
+      tryBody
+      [ 
+        finalCatch
+      ]
+    )
+  _catch: (ast, contAST, cbAST) ->
+    body = @run ast.body, contAST, cbAST
+    AST.catch ast.param, body
+
+module.exports = CpsTransformer
+
+###
+#
+
 types = {}
 
 register = (ast, cps) ->
@@ -247,7 +505,7 @@ makeCallback = (contAST, cbAST, resParam = AST.param('res')) ->
     )
 
 _local = (ast, contAST, cbAST) ->
-  #loglet.log "--cps.local", ast, contAST
+  #TR.log "--cps.local", ast, contAST
   if ast.isAsync()
     _cpsOne ast.value, makeCallback(contAST, cbAST, AST.param(ast.name)), cbAST
   else
@@ -257,7 +515,7 @@ _local = (ast, contAST, cbAST) ->
 register AST.get('local'), _local
 
 _assign = (ast, contAST, cbAST) ->
-  #loglet.log "--cps.assign", ast, contAST
+  #TR.log "--cps.assign", ast, contAST
   if ast.isAsync()
     _cpsOne ast.value, makeCallback(contAST, cbAST, AST.param(ast.name)), cbAST
   else
@@ -285,7 +543,7 @@ register AST.get('define'), _define
 
 _return = (ast, contAST, cbAST) ->
   #type = exp.type() # for dealing with none 
-  #loglet.log '--cps.return', ast, contAST
+  #TR.log '--cps.return', ast, contAST
   val = ast.value
   if val.type() == 'taskcall'
     _taskcall val, contAST, cbAST
@@ -407,4 +665,4 @@ module.exports =
   override: override
   transform: cps
 
-
+####

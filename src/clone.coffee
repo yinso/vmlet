@@ -1,7 +1,7 @@
 AST = require './ast'
 Environment = require './symboltable'
 
-class CloneRegistry
+class CloneTransformer
   @transform: (ast) -> 
     if not @reg 
       @reg = new @()
@@ -119,4 +119,4 @@ class CloneRegistry
   _return: (ast, env) -> 
     AST.return @run(ast.value, env)
 
-module.exports = CloneRegistry
+module.exports = CloneTransformer
