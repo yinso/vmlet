@@ -421,7 +421,6 @@ AST.register class TASK extends AST
       '}'
     ]
 
-
 AST.register class IF extends AST
   @type: 'if'
   constructor: (@cond, @then, @else) ->

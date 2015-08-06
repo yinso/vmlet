@@ -115,7 +115,7 @@ binding = (spec, as = null) ->
 let_ = (id, defines, body) ->
   params = 
     for def in defines 
-      def.name 
+      AST.param(def.name)
   args = 
     for def in defines 
       def.value 
