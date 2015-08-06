@@ -222,19 +222,6 @@ class AnfTransformer
         spec = @run binding.spec, env, block
         AST.binding spec, binding.as
     block.push AST.export bindings
-  _let: (ast, env, block) ->
-    #newEnv = Environment.pushEnv env
-    newEnv = env
-    defines = []
-    for define in ast.defines
-      @run define, newEnv, block
-    #TR.log '-- ANF.let', ast, defines
-    body = @run ast.body , newEnv
-    if body.type() == 'block'
-      for exp in body.items 
-        block.push exp 
-    else
-      block.push body
   _toplevel: (ast, env, block) -> 
     body = @runInner ast.body, env, block 
     ast.clone AST.return(body)

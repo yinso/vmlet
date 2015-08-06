@@ -169,13 +169,6 @@ class Resolver
         else
           AST.binding(env.get(binding.spec), binding.as)
     AST.export(bindings)
-  _let: (ast, env) ->
-    newEnv = env.pushEnv()
-    defines = 
-      for define in ast.defines 
-        @run define , newEnv
-    body = @run ast.body , newEnv 
-    AST.let defines, body
   _while: (ast, env) -> 
     cond = @run ast.cond, env 
     block = @run at.blcok, env 

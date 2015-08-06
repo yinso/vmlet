@@ -392,28 +392,6 @@ AST.register class PROCEDURE extends AST
       '}'
     ]
 
-# having LET expression is basically the same as 
-AST.register class LET extends AST 
-  @type: 'let'
-  constructor: (@defines, @body) ->
-  _equals: (v) -> 
-    @ == v
-  _pretty: (level, dupe) -> 
-    dupe = util.dupe @, dupe
-    [
-      util.nest(level)
-      '{let '
-      [
-        '('
-        (define._pretty(level + 1, dupe) for define in @defines)
-        ')'
-      ]
-      ' = '
-      @body._pretty(level + 1, dupe)  
-      util.nest(level)
-      '}'
-    ]
-
 AST.register class TASK extends AST
   @type: 'task'
   constructor: (@name, @params, @body, @returns = null) ->

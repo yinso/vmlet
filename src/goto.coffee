@@ -83,8 +83,6 @@ class TcoRegistry
     AST.case ast.cond, @run(ast.exp, procs, label)
   _defaultCase: (ast, procs, label) -> 
     AST.defaultCase @run(ast, procs, label)
-  _let: (ast, procs, label) -> 
-    AST.let ast.defines, @run(ast.body, procs, label)
   _continue: (ast, procs, label) -> ast
   _break: (ast, procs, label) -> ast
   _funcall: (ast, procs, label) -> 

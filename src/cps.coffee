@@ -211,14 +211,12 @@ class CpsTransformer
     @normalize contAST
   _taskcall: (ast, contAST, cbAST) ->
     args = [].concat(ast.args)
-    # console.log '--_taskcall', ast, contAST, cbAST
     if contAST.type() == 'procedure'
       args.push contAST
     else
       args.push @makeCallback contAST, cbAST
     AST.return(AST.funcall(ast.funcall, args))
   _local: (ast, contAST, cbAST) ->
-    TR.log "--cps.local", ast, contAST
     if ast.isAsync()
       @run ast.value, @makeCallback(contAST, cbAST, AST.param(ast.name)), cbAST
     else
