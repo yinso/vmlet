@@ -8,7 +8,7 @@ class FreeVariable
       @reg = new @()
     @reg.transform ast, env
   transform: (ast, env) -> 
-    if ast.type() != 'procedure'
+    if ast.type() != 'procedure' and ast.type() != 'task'
       throw new Error("FreeVariable.not_a_procedure: #{ast.type()}")
     # I can pass in procs or just pass in a list of the defined 
     refs = []

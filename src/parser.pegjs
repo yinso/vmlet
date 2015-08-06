@@ -86,7 +86,7 @@ DefineExp
 LetExp
 ************************************************************************/
 LetExp
-= 'let' _ defines:letDefineList _ body:Expression { return helper.let(defines, body); }
+= 'let' id:SymbolExp? _ defines:letDefineList _ body:Expression { return helper.let(id, defines, body); }
 
 letDefineList 
 = '(' _ defines:letDefineExp+ _ ')' _ { return defines; }
@@ -98,7 +98,7 @@ letDefineExp
 LetTaskExp
 ************************************************************************/
 LetTaskExp
-= 'let' _ defines:letDefineTaskList _ body:Expression { return helper.let(defines, body); }
+= 'let' id:SymbolExp? _ defines:letDefineTaskList _ body:Expression { return helper.letTask(id, defines, body); }
 
 letDefineTaskList 
 = '(' _ defines:letDefineTaskExp+ _ ')' _ { return defines; }

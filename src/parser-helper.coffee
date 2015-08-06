@@ -112,8 +112,24 @@ export_ = (spec) ->
 binding = (spec, as = null) ->
   AST.binding spec, as
 
-let_ = (defines, body) ->
-  AST.let defines, body
+let_ = (id, defines, body) ->
+  params = 
+    for def in defines 
+      def.name 
+  args = 
+    for def in defines 
+      def.value 
+  AST.funcall(AST.procedure(id, params, body), args)
+
+
+letTask = (id, defines, body) ->
+  params = 
+    for def in defines 
+      AST.param(def.name)
+  args = 
+    for def in defines 
+      def.value 
+  AST.taskcall(AST.task(id, params, body), args)
 
 module.exports = 
   number: number
@@ -142,5 +158,6 @@ module.exports =
   export: export_
   binding: binding
   let: let_
+  letTask: letTask
 
 

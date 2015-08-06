@@ -112,6 +112,7 @@ class Runtime
     @baseEnv.define AST.symbol('console'), AST.proxyval('console', AST.symbol('console'))
     @baseEnv.define AST.symbol('import'), AST.proxyval('import', AST.member(AST.runtimeID, AST.symbol('import')))
     @context = vm.createContext { _rt: @ , console: console , process: process , fs: fs }
+    @settings = {}
   unit: Unit.unit
   proc: (func, def) -> 
     Object.defineProperty func, '__vmlet',
@@ -157,27 +158,42 @@ class Runtime
     @define key, @makeAsync funcMaker
   parse: (stmt) ->
     ast = @parser.parse stmt
-    #TR.log '-------- Runtime.parsed =>', ast
+    if @settings.parsed
+      TR.log '-------- Runtime.parsed =>', ast
     ast
   transform: (ast, env = @main.env) ->
     ast = RESOLVER.transform ast, env
-    #TR.log '-------- Runtime.resolved =>', ast
+    if @settings.resolved
+      TR.log '-------- Runtime.resolved =>', ast
     defines = PROC.normalize ast 
-    #console.log '--Runtime.before.anf', ast
+    if @settings.beforeANF
+      TR.log '--Runtime.before.anf', ast
     anf = ANF.transform ast
-    #console.log '--Runtime.after.anf', anf
+    if @settings.afterANF
+      TR.log '--Runtime.after.anf', anf
     anf 
   compile: (ast) ->
     compiled = compiler.compile ast
-    console.log '--Runtime.compile', compiled
+    if @settings.compiled
+      console.log '--Runtime.compiled', compiled
     vm.runInContext compiled, @context
   isPackage: (filePath) -> 
     false
+  setToggle: (key) -> 
+    if @settings[key]
+      @settings[key] = false
+    else
+      @settings[key] = true
+    console.log '-- Runtime.setToggle', key, @settings[key]
   eval: (stmt, cb) ->
     if stmt.indexOf(':modules') == 0
       return cb null, util.prettify(@modules)
     else if stmt.indexOf(':env') == 0
       return cb null, util.prettify(@main)
+    else if stmt.indexOf(':') == 0
+      key = stmt.substring(1, stmt.length - 1)
+      @setToggle key
+      return cb null
     try 
       ast = AST.toplevel @parse stmt 
       #console.log 'Runtime.parsed', ast

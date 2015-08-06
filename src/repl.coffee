@@ -35,7 +35,6 @@ class Repl extends EventEmitter
       historySize: 30
       onError: (repl, err) ->
         repl.errorWriteLine '<ERROR>'
-        repl.errorWriteLine "#{err}"
         if err.fileName
           repl.errorWriteLine "-- on #{err.fileName}, #{err.lineNumber}"
         repl.errorWriteLine err.stack
